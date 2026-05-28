@@ -222,26 +222,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
       <div class="sec">Obras activas</div>
       <div id="dash-obras-list"><div class="loading">Cargando...</div></div>
     </div>
-    <div class="bnav">
-      <div class="ni act"><i class="ti ti-home"></i>Inicio</div>
-      <div class="ni" onclick="go('p-obras')"><i class="ti ti-building"></i>Obras</div>
-      <div class="ni" onclick="go('p-contratistas')"><i class="ti ti-users"></i>Contratistas</div>
-      <div class="ni" onclick="go('p-cobros-list')"><i class="ti ti-cash"></i>Cobros</div>
-      <div class="ni" onclick="go('p-materiales-list')"><i class="ti ti-package"></i>Materiales</div>
-    </div>
   </div>
 
   <!-- OBRAS LIST -->
   <div class="page" id="p-obras">
     <div class="tb"><div class="tb-row"><div class="tb-title">Obras</div><span class="act-r" onclick="go('p-obra-form');editObra=null;renderObraForm()">+ Nueva</span></div></div>
     <div class="content" id="obras-list"><div class="loading">Cargando...</div></div>
-    <div class="bnav">
-      <div class="ni" onclick="go('p-dash')"><i class="ti ti-home"></i>Inicio</div>
-      <div class="ni act"><i class="ti ti-building"></i>Obras</div>
-      <div class="ni" onclick="go('p-contratistas')"><i class="ti ti-users"></i>Contratistas</div>
-      <div class="ni" onclick="go('p-cobros-list')"><i class="ti ti-cash"></i>Cobros</div>
-      <div class="ni" onclick="go('p-materiales-list')"><i class="ti ti-package"></i>Materiales</div>
-    </div>
   </div>
 
   <!-- OBRA FORM (nueva / editar) -->
@@ -276,9 +262,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
       </div>
       <div class="btn-row">
         <button class="btn-sm btn-sm-blue" onclick="go('p-presup-nuevo');setPresupContext(currentObraId)">+ Presupuesto</button>
-        <button class="btn-sm btn-sm-ghost" onclick="go('p-cobros-form');setCobrosObraContext(currentObraId)">Cobro</button>
-        <button class="btn-sm btn-sm-ghost" onclick="go('p-pago-form');setPagoObraContext(currentObraId)">Pago MO</button>
-        <button class="btn-sm btn-sm-ghost" onclick="go('p-materiales-form');setMatObraContext(currentObraId)">Material</button>
+        <button class="btn-sm btn-sm-ghost" onclick="go('p-obra-cobros')">Cobros</button>
+        <button class="btn-sm btn-sm-ghost" onclick="go('p-obra-pagos')">Pagos MO</button>
+        <button class="btn-sm btn-sm-ghost" onclick="go('p-obra-materiales')">Materiales</button>
       </div>
       <div class="sec">Presupuestos</div>
       <div id="det-presup-list"><div class="loading">Cargando...</div></div>
@@ -328,13 +314,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
   <div class="page" id="p-contratistas">
     <div class="tb"><div class="tb-row"><div class="tb-title">Contratistas</div><span class="act-r" onclick="go('p-contratista-form');editContratista=null;renderContratistaForm()">+ Nuevo</span></div></div>
     <div class="content" id="contratistas-list"><div class="loading">Cargando...</div></div>
-    <div class="bnav">
-      <div class="ni" onclick="go('p-dash')"><i class="ti ti-home"></i>Inicio</div>
-      <div class="ni" onclick="go('p-obras')"><i class="ti ti-building"></i>Obras</div>
-      <div class="ni act"><i class="ti ti-users"></i>Contratistas</div>
-      <div class="ni" onclick="go('p-cobros-list')"><i class="ti ti-cash"></i>Cobros</div>
-      <div class="ni" onclick="go('p-materiales-list')"><i class="ti ti-package"></i>Materiales</div>
-    </div>
   </div>
 
   <!-- CONTRATISTA FORM -->
@@ -372,13 +351,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
   <div class="page" id="p-cobros-list">
     <div class="tb"><div class="tb-row"><div class="tb-title">Cobros</div><span class="act-r" onclick="go('p-cobros-form')">+ Nuevo</span></div></div>
     <div class="content" id="cobros-list"><div class="loading">Cargando...</div></div>
-    <div class="bnav">
-      <div class="ni" onclick="go('p-dash')"><i class="ti ti-home"></i>Inicio</div>
-      <div class="ni" onclick="go('p-obras')"><i class="ti ti-building"></i>Obras</div>
-      <div class="ni" onclick="go('p-contratistas')"><i class="ti ti-users"></i>Contratistas</div>
-      <div class="ni act"><i class="ti ti-cash"></i>Cobros</div>
-      <div class="ni" onclick="go('p-materiales-list')"><i class="ti ti-package"></i>Materiales</div>
-    </div>
   </div>
 
   <!-- COBROS FORM -->
@@ -412,13 +384,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
   <div class="page" id="p-materiales-list">
     <div class="tb"><div class="tb-row"><div class="tb-title">Materiales</div><span class="act-r" onclick="go('p-materiales-form')">+ Nuevo</span></div></div>
     <div class="content" id="materiales-list"><div class="loading">Cargando...</div></div>
-    <div class="bnav">
-      <div class="ni" onclick="go('p-dash')"><i class="ti ti-home"></i>Inicio</div>
-      <div class="ni" onclick="go('p-obras')"><i class="ti ti-building"></i>Obras</div>
-      <div class="ni" onclick="go('p-contratistas')"><i class="ti ti-users"></i>Contratistas</div>
-      <div class="ni" onclick="go('p-cobros-list')"><i class="ti ti-cash"></i>Cobros</div>
-      <div class="ni act"><i class="ti ti-package"></i>Materiales</div>
-    </div>
   </div>
 
   <!-- MATERIALES FORM -->
@@ -467,7 +432,33 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
     </div>
   </div>
 
+
+  <!-- OBRA COBROS LIST -->
+  <div class="page" id="p-obra-cobros">
+    <div class="tb"><div class="tb-row"><span class="back" onclick="go('p-obra-detalle')"><i class="ti ti-arrow-left"></i> Obra</span><div class="tb-title">Cobros de obra</div><span class="act-r" onclick="go('p-cobros-form');setCobrosObraContext(currentObraId)">+ Nuevo</span></div></div>
+    <div class="content" id="obra-cobros-list"><div class="loading">Cargando...</div></div>
+  </div>
+
+  <!-- OBRA PAGOS MO LIST -->
+  <div class="page" id="p-obra-pagos">
+    <div class="tb"><div class="tb-row"><span class="back" onclick="go('p-obra-detalle')"><i class="ti ti-arrow-left"></i> Obra</span><div class="tb-title">Pagos MO</div><span class="act-r" onclick="go('p-pago-form');setPagoObraContext(currentObraId)">+ Nuevo</span></div></div>
+    <div class="content" id="obra-pagos-list"><div class="loading">Cargando...</div></div>
+  </div>
+
+  <!-- OBRA MATERIALES LIST -->
+  <div class="page" id="p-obra-materiales">
+    <div class="tb"><div class="tb-row"><span class="back" onclick="go('p-obra-detalle')"><i class="ti ti-arrow-left"></i> Obra</span><div class="tb-title">Materiales</div><span class="act-r" onclick="go('p-materiales-form');setMatObraContext(currentObraId)">+ Nuevo</span></div></div>
+    <div class="content" id="obra-materiales-list"><div class="loading">Cargando...</div></div>
+  </div>
+
 </div><!-- /screen -->
+<div class="bnav" id="main-bnav">
+  <div class="ni act" id="ni-dash" onclick="go('p-dash')"><i class="ti ti-home"></i>Inicio</div>
+  <div class="ni" id="ni-obras" onclick="go('p-obras')"><i class="ti ti-building"></i>Obras</div>
+  <div class="ni" id="ni-contratistas" onclick="go('p-contratistas')"><i class="ti ti-users"></i>Contratistas</div>
+  <div class="ni" id="ni-cobros" onclick="go('p-cobros-list')"><i class="ti ti-cash"></i>Cobros</div>
+  <div class="ni" id="ni-materiales" onclick="go('p-materiales-list')"><i class="ti ti-package"></i>Materiales</div>
+</div>
 </div><!-- /app -->
 
 <div id="toast"></div>
@@ -503,6 +494,7 @@ function go(id) {
   document.getElementById(id).classList.add('active');
   currentPage = id;
   onPageEnter(id);
+  updateNav(id);
 }
 
 function goBack() {
@@ -511,6 +503,22 @@ function goBack() {
   document.getElementById(prev).classList.add('active');
   currentPage = prev;
   onPageEnter(prev);
+  updateNav(prev);
+}
+
+function updateNav(id) {
+  const map = {
+    'p-dash': 'ni-dash',
+    'p-obras': 'ni-obras', 'p-obra-detalle': 'ni-obras', 'p-obra-form': 'ni-obras',
+    'p-obra-cobros': 'ni-obras', 'p-obra-pagos': 'ni-obras', 'p-obra-materiales': 'ni-obras',
+    'p-presup-nuevo': 'ni-obras',
+    'p-contratistas': 'ni-contratistas', 'p-contratista-detalle': 'ni-contratistas', 'p-contratista-form': 'ni-contratistas',
+    'p-cobros-list': 'ni-cobros', 'p-cobros-form': 'ni-cobros', 'p-pago-form': 'ni-cobros',
+    'p-materiales-list': 'ni-materiales', 'p-materiales-form': 'ni-materiales',
+  };
+  document.querySelectorAll('#main-bnav .ni').forEach(n => n.classList.remove('act'));
+  const active = map[id];
+  if (active) document.getElementById(active).classList.add('act');
 }
 
 function onPageEnter(id) {
@@ -523,6 +531,9 @@ function onPageEnter(id) {
   else if (id === 'p-materiales-form') initMatForm();
   else if (id === 'p-pago-form') initPagoForm();
   else if (id === 'p-presup-nuevo') initPresupForm();
+  else if (id === 'p-obra-cobros') loadObraCobros(currentObraId);
+  else if (id === 'p-obra-pagos') loadObraPagos(currentObraId);
+  else if (id === 'p-obra-materiales') loadObraMateriales(currentObraId);
 }
 
 // ---- AUTH ----
@@ -686,7 +697,7 @@ async function loadDash() {
 
 // ---- OBRAS ----
 async function loadObras() {
-  const { data, error } = await db.from('caja_obras').select('*').order('created_at', { ascending: false });
+  const { data, error } = await db.from('caja_obras').select('*').order('nombre');
   const list = document.getElementById('obras-list');
   if (error || !data || data.length === 0) {
     list.innerHTML = `<div class="empty"><i class="ti ti-building"></i><p>No hay obras todavía.<br>Tocá "+ Nueva" para crear una.</p></div>`;
@@ -713,9 +724,9 @@ async function loadObraDetalle(id) {
     db.from('obras').select('*').eq('id', id).single(),
     db.from('caja_obras').select('*').eq('id', id).single(),
     db.from('presupuestos').select('*, contratistas(nombre)').eq('obra_id', id).order('created_at', { ascending: false }),
-    db.from('cobros').select('*').eq('obra_id', id).order('fecha', { ascending: false }).limit(5),
-    db.from('pagos_contratistas').select('*').eq('obra_id', id).order('fecha', { ascending: false }).limit(5),
-    db.from('materiales').select('*').eq('obra_id', id).order('fecha', { ascending: false }).limit(5),
+    db.from('cobros').select('*').eq('obra_id', id).order('fecha', { ascending: false }),
+    db.from('pagos_contratistas').select('*').eq('obra_id', id).order('fecha', { ascending: false }),
+    db.from('materiales').select('*').eq('obra_id', id).order('fecha', { ascending: false }),
   ]);
 
   document.getElementById('det-obra-title').textContent = obra.cliente;
@@ -725,32 +736,47 @@ async function loadObraDetalle(id) {
   document.getElementById('det-caja').className = 'm-val ' + (caja >= 0 ? 'ok' : 'err');
 
   const totalPresupAprobado = (presups || []).filter(p => p.estado === 'Aprobado').reduce((s, p) => s + p.monto, 0);
-  const totalCobrado = (cobros || []).reduce((s, c) => s + c.monto, 0) +
-    (await db.from('cobros').select('monto').eq('obra_id', id)).data?.reduce((s,c) => s+c.monto,0) || 0;
-  const totalCobradoFull = (await db.from('cobros').select('monto').eq('obra_id', id)).data?.reduce((s,c) => s+c.monto,0) || 0;
+  const totalCobradoFull = (cobros || []).reduce((s, c) => s + c.monto, 0);
   const porCobrar = Math.max(totalPresupAprobado - totalCobradoFull, 0);
 
-  // Deuda contratistas en esta obra
-  const totalPresupMO = (presups || []).filter(p => p.tipo === 'Mano de obra' && p.estado === 'Aprobado').reduce((s,p) => s + p.costo_contratista, 0);
-  const totalPagadoCont = (pagos || []).reduce((s,p) => s + p.monto, 0);
-  const { data: allPagos } = await db.from('pagos_contratistas').select('monto').eq('obra_id', id);
-  const totalPagadoContFull = (allPagos || []).reduce((s,p) => s + p.monto, 0);
+  const totalPresupMO = (presups || []).filter(p => p.tipo === 'Mano de obra' && p.estado === 'Aprobado').reduce((s, p) => s + p.costo_contratista, 0);
+  const totalPagadoContFull = (pagos || []).reduce((s, p) => s + p.monto, 0);
   const aPagar = Math.max(totalPresupMO - totalPagadoContFull, 0);
 
-  const totalMat = (await db.from('materiales').select('monto').eq('obra_id', id)).data?.reduce((s,m) => s+m.monto,0) || 0;
+  const totalMat = (mats || []).reduce((s, m) => s + m.monto, 0);
 
   document.getElementById('det-cobrar').textContent = fmt(porCobrar);
   document.getElementById('det-pagar').textContent = fmt(aPagar);
   document.getElementById('det-mat').textContent = fmt(totalMat);
 
-  // Presupuestos
+  // Maps para barras de progreso
+  const cobradoByPresup = {};
+  (cobros || []).forEach(c => {
+    if (c.presupuesto_id) cobradoByPresup[c.presupuesto_id] = (cobradoByPresup[c.presupuesto_id] || 0) + c.monto;
+  });
+  const pagadoByPresup = {};
+  (pagos || []).forEach(p => {
+    if (p.presupuesto_id) {
+      const m = (p.moneda === 'USD' && p.cotizacion) ? p.monto * p.cotizacion : p.monto;
+      pagadoByPresup[p.presupuesto_id] = (pagadoByPresup[p.presupuesto_id] || 0) + m;
+    }
+  });
+
+  // Presupuestos con barra de progreso real
   const detPresup = document.getElementById('det-presup-list');
   if (!presups || presups.length === 0) {
     detPresup.innerHTML = `<div class="empty"><i class="ti ti-file-text"></i><p>Sin presupuestos.</p></div>`;
   } else {
     detPresup.innerHTML = presups.map(p => {
-      const cobradoP = 0; // simplificado
-      const pct = p.monto > 0 ? Math.min(cobradoP / p.monto * 100, 100) : 0;
+      let cobradoP = 0, base = 0;
+      if (p.tipo === 'Honorarios') {
+        cobradoP = cobradoByPresup[p.id] || 0;
+        base = p.monto;
+      } else {
+        cobradoP = pagadoByPresup[p.id] || 0;
+        base = p.costo_contratista || 0;
+      }
+      const pct = base > 0 ? Math.min(cobradoP / base * 100, 100) : 0;
       return `
         <div class="card" onclick="openPresupEdit('${p.id}')">
           <div class="c-row">
@@ -761,23 +787,24 @@ async function loadObraDetalle(id) {
             </div>
             <div><div class="c-amt">${fmtFull(p.monto, p.moneda)}</div></div>
           </div>
-          <div class="prog-wrap"><div class="prog-fill" style="width:${pct}%"></div></div>
+          <div class="prog-wrap"><div class="prog-fill" style="width:${pct.toFixed(1)}%"></div></div>
         </div>`;
     }).join('');
   }
 
-  // Movimientos recientes
+  // Últimos movimientos — todos los tipos mezclados, ordenados por fecha, top 15
   const movs = [];
-  (cobros || []).forEach(c => movs.push({ tipo: 'cobro', fecha: c.fecha, desc: 'Cobro: ' + c.tipo, monto: c.monto, moneda: c.moneda, signo: 1 }));
-  (pagos || []).forEach(p => movs.push({ tipo: 'pago', fecha: p.fecha, desc: 'Pago contratista', monto: p.monto, moneda: p.moneda, signo: -1 }));
-  (mats || []).forEach(m => movs.push({ tipo: 'mat', fecha: m.fecha, desc: 'Material: ' + m.descripcion, monto: m.monto, moneda: m.moneda, signo: -1 }));
-  movs.sort((a, b) => b.fecha > a.fecha ? 1 : -1);
+  (cobros || []).forEach(c => movs.push({ fecha: c.fecha, desc: 'Cobro: ' + c.tipo, monto: c.monto, moneda: c.moneda, signo: 1 }));
+  (pagos || []).forEach(p => movs.push({ fecha: p.fecha, desc: 'Pago contratista', monto: p.monto, moneda: p.moneda, signo: -1 }));
+  (mats || []).forEach(m => movs.push({ fecha: m.fecha, desc: 'Material: ' + m.descripcion, monto: m.monto, moneda: m.moneda, signo: -1 }));
+  movs.sort((a, b) => b.fecha > a.fecha ? 1 : b.fecha < a.fecha ? -1 : 0);
+  const top15 = movs.slice(0, 15);
 
   const detMov = document.getElementById('det-movimientos-list');
-  if (movs.length === 0) {
+  if (top15.length === 0) {
     detMov.innerHTML = `<div class="empty"><i class="ti ti-clock"></i><p>Sin movimientos.</p></div>`;
   } else {
-    detMov.innerHTML = movs.map(m => `
+    detMov.innerHTML = top15.map(m => `
       <div class="card">
         <div class="c-row">
           <div><div class="c-title">${m.desc}</div><div class="c-sub">${m.fecha}</div></div>
@@ -1285,6 +1312,63 @@ async function savePago() {
   document.getElementById('f-pago-cot').value = '';
   document.getElementById('f-pago-cot-box').style.display = 'none';
   goBack();
+}
+
+// ---- LISTAS POR OBRA ----
+async function loadObraCobros(obraId) {
+  const { data } = await db.from('cobros').select('*').eq('obra_id', obraId).order('fecha', { ascending: false });
+  const list = document.getElementById('obra-cobros-list');
+  if (!data || data.length === 0) {
+    list.innerHTML = `<div class="empty"><i class="ti ti-cash"></i><p>Sin cobros en esta obra.</p></div>`; return;
+  }
+  list.innerHTML = data.map(c => `
+    <div class="card">
+      <div class="c-row">
+        <div>
+          <div class="c-title">${c.tipo}</div>
+          <div class="c-sub">${c.fecha}${c.notas ? ' · ' + c.notas : ''}</div>
+        </div>
+        <div class="c-amt ok">+${fmtFull(c.monto, c.moneda)}</div>
+      </div>
+    </div>`).join('');
+}
+
+async function loadObraPagos(obraId) {
+  const { data } = await db.from('pagos_contratistas').select('*, contratistas(nombre)').eq('obra_id', obraId).order('fecha', { ascending: false });
+  const list = document.getElementById('obra-pagos-list');
+  if (!data || data.length === 0) {
+    list.innerHTML = `<div class="empty"><i class="ti ti-credit-card"></i><p>Sin pagos en esta obra.</p></div>`; return;
+  }
+  list.innerHTML = data.map(p => `
+    <div class="card">
+      <div class="c-row">
+        <div>
+          <div class="c-title">${p.contratistas?.nombre || 'Contratista'}</div>
+          <div class="c-sub">${p.fecha}${p.notas ? ' · ' + p.notas : ''}</div>
+          ${p.es_adelanto ? '<span class="badge b-pau">adelanto tuyo</span>' : ''}
+        </div>
+        <div class="c-amt err">-${fmtFull(p.monto, p.moneda)}</div>
+      </div>
+    </div>`).join('');
+}
+
+async function loadObraMateriales(obraId) {
+  const { data } = await db.from('materiales').select('*').eq('obra_id', obraId).order('fecha', { ascending: false });
+  const list = document.getElementById('obra-materiales-list');
+  if (!data || data.length === 0) {
+    list.innerHTML = `<div class="empty"><i class="ti ti-package"></i><p>Sin compras en esta obra.</p></div>`; return;
+  }
+  list.innerHTML = data.map(m => `
+    <div class="card">
+      <div class="c-row">
+        <div>
+          <div class="c-title">${m.descripcion}</div>
+          <div class="c-sub">${m.fecha}${m.notas ? ' · ' + m.notas : ''}</div>
+          ${m.es_adelanto ? '<span class="badge b-pau">adelanto tuyo</span>' : ''}
+        </div>
+        <div class="c-amt err">-${fmtFull(m.monto, m.moneda)}</div>
+      </div>
+    </div>`).join('');
 }
 
 // ---- INIT ----
