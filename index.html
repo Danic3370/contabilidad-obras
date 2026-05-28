@@ -261,7 +261,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
     <div class="content">
       <div class="grid2">
         <div class="metric"><div class="m-lbl">Caja obra</div><div class="m-val ok" id="det-caja">—</div></div>
-        <div class="metric"><div class="m-lbl">Total cobrado</div><div class="m-val ok" id="det-cobrar">—</div></div>
+        <div class="metric"><div class="m-lbl">Adelantos cobrados</div><div class="m-val ok" id="det-cobrar">—</div></div>
         <div class="metric"><div class="m-lbl">Pagado cont.</div><div class="m-val err" id="det-pagar">—</div></div>
         <div class="metric"><div class="m-lbl">En materiales</div><div class="m-val purp" id="det-mat">—</div></div>
       </div>
@@ -737,7 +737,7 @@ async function loadObraDetalle(id) {
     db.from('caja_obras').select('*').eq('id', id).single(),
     db.from('presupuestos').select('*, contratistas(nombre)').eq('obra_id', id).order('created_at', { ascending: false }),
     db.from('cobros').select('*').eq('obra_id', id).order('fecha', { ascending: false }),
-    db.from('pagos_contratistas').select('*').eq('obra_id', id).order('fecha', { ascending: false }),
+    db.from('pagos_contratistas').select('*, contratistas(nombre)').eq('obra_id', id).order('fecha', { ascending: false }),
     db.from('materiales').select('*').eq('obra_id', id).order('fecha', { ascending: false }),
   ]);
 
@@ -825,9 +825,9 @@ async function loadObraDetalle(id) {
 
   // Últimos movimientos — todos los tipos mezclados, ordenados por fecha, top 15
   const movs = [];
-  (cobros || []).forEach(c => movs.push({ fecha: c.fecha, desc: 'Cobro: ' + c.tipo, monto: c.monto, moneda: c.moneda, signo: 1 }));
-  (pagos || []).forEach(p => movs.push({ fecha: p.fecha, desc: 'Pago contratista', monto: p.monto, moneda: p.moneda, signo: -1 }));
-  (mats || []).forEach(m => movs.push({ fecha: m.fecha, desc: 'Material: ' + m.descripcion, monto: m.monto, moneda: m.moneda, signo: -1 }));
+  (cobros || []).forEach(c => movs.push({ fecha: c.fecha, desc: c.tipo + (c.notas ? ' · ' + c.notas : ''), monto: c.monto, moneda: c.moneda, signo: 1 }));
+  (pagos || []).forEach(p => movs.push({ fecha: p.fecha, desc: (p.contratistas?.nombre || 'Contratista') + (p.notas ? ' · ' + p.notas : ''), monto: p.monto, moneda: p.moneda, signo: -1 }));
+  (mats || []).forEach(m => movs.push({ fecha: m.fecha, desc: m.descripcion + (m.notas ? ' · ' + m.notas : ''), monto: m.monto, moneda: m.moneda, signo: -1 }));
   movs.sort((a, b) => b.fecha > a.fecha ? 1 : b.fecha < a.fecha ? -1 : 0);
   const top15 = movs.slice(0, 15);
 
