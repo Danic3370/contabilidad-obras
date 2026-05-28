@@ -92,6 +92,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
 .qa-label{font-size:12px;font-weight:500;color:var(--text)}
 .qa-sub{font-size:10px;color:var(--sub);margin-top:1px}
 
+/* Cotizacion blue box */
+.cot-box{display:none;margin-bottom:12px}
+.blue-ref{font-size:11px;color:var(--sub);background:#EBF4FF;border-radius:8px;padding:8px 10px;margin-bottom:8px;line-height:1.7}
+.blue-ref strong{color:var(--blue)}
+.blue-ref.loading{color:#aaa;background:#f5f5f5}
+
 /* Forms */
 .field{margin-bottom:12px}
 .field label{font-size:11px;color:var(--sub);display:block;margin-bottom:4px}
@@ -389,8 +395,13 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
       <div id="f-cobro-caja-box"></div>
       <div class="fr">
         <div class="field"><label>Monto cobrado *</label><input type="number" id="f-cobro-monto" placeholder="0"/></div>
-        <div class="field"><label>Fecha</label><input type="date" id="f-cobro-fecha"/></div>
+        <div class="field"><label>Moneda</label><select id="f-cobro-moneda" onchange="onMonedaChange('f-cobro-moneda','f-cobro-cot-box','f-cobro-blue-ref')"><option>ARS</option><option>USD</option></select></div>
       </div>
+      <div class="cot-box" id="f-cobro-cot-box">
+        <div class="blue-ref loading" id="f-cobro-blue-ref">Cargando cotización blue...</div>
+        <div class="field"><label>Cotización utilizada ($ por USD)</label><input type="number" id="f-cobro-cot" placeholder="Ej: 1380"/></div>
+      </div>
+      <div class="field"><label>Fecha</label><input type="date" id="f-cobro-fecha"/></div>
       <div class="field"><label>Notas</label><textarea id="f-cobro-notas" placeholder="Observaciones..."></textarea></div>
       <button class="btn-main" onclick="saveCobro()">Registrar cobro</button>
       <button class="btn-ghost" onclick="goBack()">Cancelar</button>
@@ -419,7 +430,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
       <div class="field"><label>Descripción *</label><input type="text" id="f-mat-desc" placeholder="Ej: Cerámicos 60x60 · 40m²"/></div>
       <div class="fr">
         <div class="field"><label>Monto *</label><input type="number" id="f-mat-monto" placeholder="0"/></div>
-        <div class="field"><label>Moneda</label><select id="f-mat-moneda"><option>ARS</option><option>USD</option></select></div>
+        <div class="field"><label>Moneda</label><select id="f-mat-moneda" onchange="onMonedaChange('f-mat-moneda','f-mat-cot-box','f-mat-blue-ref')"><option>ARS</option><option>USD</option></select></div>
+      </div>
+      <div class="cot-box" id="f-mat-cot-box">
+        <div class="blue-ref loading" id="f-mat-blue-ref">Cargando cotización blue...</div>
+        <div class="field"><label>Cotización utilizada ($ por USD)</label><input type="number" id="f-mat-cot" placeholder="Ej: 1380"/></div>
       </div>
       <div class="field"><label>Fecha</label><input type="date" id="f-mat-fecha"/></div>
       <div class="field"><label>Notas</label><textarea id="f-mat-notas" placeholder="Observaciones..."></textarea></div>
@@ -439,7 +454,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
       <div class="field"><label>Presupuesto asociado</label><select id="f-pago-presup"><option value="">Seleccionar...</option></select></div>
       <div class="fr">
         <div class="field"><label>Monto a pagar *</label><input type="number" id="f-pago-monto" placeholder="0"/></div>
-        <div class="field"><label>Fecha</label><input type="date" id="f-pago-fecha"/></div>
+        <div class="field"><label>Moneda</label><select id="f-pago-moneda" onchange="onMonedaChange('f-pago-moneda','f-pago-cot-box','f-pago-blue-ref')"><option>ARS</option><option>USD</option></select></div>
+      </div>
+      <div class="cot-box" id="f-pago-cot-box">
+        <div class="blue-ref loading" id="f-pago-blue-ref">Cargando cotización blue...</div>
+        <div class="field"><label>Cotización utilizada ($ por USD)</label><input type="number" id="f-pago-cot" placeholder="Ej: 1380"/></div>
       </div>
       <div class="info-box ib-amber">Si el monto supera la caja disponible, el excedente se registra como adelanto tuyo a recuperar.</div>
       <div class="field"><label>Notas</label><textarea id="f-pago-notas" placeholder="Observaciones..."></textarea></div>
@@ -547,6 +566,39 @@ db.auth.onAuthStateChange((event, session) => {
     document.getElementById('app').style.display = 'none';
   }
 });
+
+// ---- DOLAR BLUE (Ambito Financiero) ----
+let _blueCache = null;
+let _blueCacheTs = 0;
+
+async function fetchAmbitoBlue() {
+  if (_blueCache && Date.now() - _blueCacheTs < 300000) return _blueCache;
+  try {
+    const res = await fetch('https://mercados.ambito.com/dolar/informal/variacion');
+    const d = await res.json();
+    _blueCache = { compra: d.compra, venta: d.venta, fecha: d.fecha };
+    _blueCacheTs = Date.now();
+    return _blueCache;
+  } catch(e) { return null; }
+}
+
+async function onMonedaChange(selectId, boxId, refId) {
+  const moneda = document.getElementById(selectId).value;
+  const box = document.getElementById(boxId);
+  const ref = document.getElementById(refId);
+  if (moneda !== 'USD') { box.style.display = 'none'; return; }
+  box.style.display = '';
+  ref.className = 'blue-ref loading';
+  ref.textContent = 'Cargando cotización blue...';
+  const blue = await fetchAmbitoBlue();
+  if (blue) {
+    ref.className = 'blue-ref';
+    ref.innerHTML = `<strong>Dólar blue — Ámbito</strong><br>Compra: <strong>$${blue.compra}</strong> &nbsp;·&nbsp; Venta: <strong>$${blue.venta}</strong> &nbsp;·&nbsp; ${blue.fecha}`;
+  } else {
+    ref.className = 'blue-ref';
+    ref.textContent = 'No se pudo cargar la cotización. Ingresala manualmente.';
+  }
+}
 
 // ---- UTILS ----
 function fmt(n, moneda = 'ARS') {
@@ -1029,12 +1081,16 @@ async function loadPresupsByCobro(obraId) {
 }
 
 async function saveCobro() {
+  const moneda = document.getElementById('f-cobro-moneda').value;
+  const cotizacion = moneda === 'USD' ? parseFloat(document.getElementById('f-cobro-cot').value) || null : null;
+  if (moneda === 'USD' && !cotizacion) { toast('Ingresá la cotización del dólar.', false); return; }
   const payload = {
     obra_id: document.getElementById('f-cobro-obra').value || null,
     presupuesto_id: document.getElementById('f-cobro-presup').value || null,
     tipo: document.getElementById('f-cobro-tipo').value,
     monto: parseFloat(document.getElementById('f-cobro-monto').value) || 0,
-    moneda: 'ARS',
+    moneda,
+    cotizacion,
     fecha: document.getElementById('f-cobro-fecha').value || today(),
     notas: document.getElementById('f-cobro-notas').value.trim() || null,
   };
@@ -1044,6 +1100,9 @@ async function saveCobro() {
   toast('Cobro registrado.');
   document.getElementById('f-cobro-monto').value = '';
   document.getElementById('f-cobro-notas').value = '';
+  document.getElementById('f-cobro-cot').value = '';
+  document.getElementById('f-cobro-moneda').value = 'ARS';
+  document.getElementById('f-cobro-cot-box').style.display = 'none';
   goBack();
 }
 
@@ -1096,16 +1155,21 @@ async function loadCajaForMat(obraId) {
 async function saveMaterial() {
   const obraId = document.getElementById('f-mat-obra').value;
   const monto = parseFloat(document.getElementById('f-mat-monto').value) || 0;
+  const moneda = document.getElementById('f-mat-moneda').value;
+  const cotizacion = moneda === 'USD' ? parseFloat(document.getElementById('f-mat-cot').value) || null : null;
   if (!obraId || !monto) { toast('Completá obra y monto.', false); return; }
+  if (moneda === 'USD' && !cotizacion) { toast('Ingresá la cotización del dólar.', false); return; }
+  const montoARS = moneda === 'USD' ? monto * cotizacion : monto;
   const { data: cajaDat } = await db.from('caja_obras').select('caja').eq('id', obraId).single();
   const caja = cajaDat?.caja || 0;
   const payload = {
     obra_id: obraId,
     descripcion: document.getElementById('f-mat-desc').value.trim(),
     monto,
-    moneda: document.getElementById('f-mat-moneda').value,
+    moneda,
+    cotizacion,
     fecha: document.getElementById('f-mat-fecha').value || today(),
-    es_adelanto: caja < monto,
+    es_adelanto: caja < montoARS,
     notas: document.getElementById('f-mat-notas').value.trim() || null,
   };
   if (!payload.descripcion) { toast('Ingresá una descripción.', false); return; }
@@ -1115,6 +1179,9 @@ async function saveMaterial() {
   document.getElementById('f-mat-desc').value = '';
   document.getElementById('f-mat-monto').value = '';
   document.getElementById('f-mat-notas').value = '';
+  document.getElementById('f-mat-cot').value = '';
+  document.getElementById('f-mat-moneda').value = 'ARS';
+  document.getElementById('f-mat-cot-box').style.display = 'none';
   goBack();
 }
 
@@ -1193,7 +1260,11 @@ async function savePago() {
   const contId = document.getElementById('f-pago-contratista').value;
   const obraId = document.getElementById('f-pago-obra').value;
   const monto = parseFloat(document.getElementById('f-pago-monto').value) || 0;
+  const moneda = document.getElementById('f-pago-moneda').value;
+  const cotizacion = moneda === 'USD' ? parseFloat(document.getElementById('f-pago-cot').value) || null : null;
   if (!contId || !obraId || !monto) { toast('Completá contratista, obra y monto.', false); return; }
+  if (moneda === 'USD' && !cotizacion) { toast('Ingresá la cotización del dólar.', false); return; }
+  const montoARS = moneda === 'USD' ? monto * cotizacion : monto;
   const { data: cajaDat } = await db.from('caja_obras').select('caja').eq('id', obraId).single();
   const caja = cajaDat?.caja || 0;
   const payload = {
@@ -1201,14 +1272,18 @@ async function savePago() {
     obra_id: obraId,
     presupuesto_id: document.getElementById('f-pago-presup').value || null,
     monto,
-    moneda: 'ARS',
+    moneda,
+    cotizacion,
     fecha: document.getElementById('f-pago-fecha').value || today(),
-    es_adelanto: caja < monto,
+    es_adelanto: caja < montoARS,
     notas: document.getElementById('f-pago-notas').value.trim() || null,
   };
   const { error } = await db.from('pagos_contratistas').insert(payload);
   if (error) { toast('Error al guardar.', false); return; }
   toast(payload.es_adelanto ? 'Pago registrado (excede caja, queda como adelanto).' : 'Pago registrado.');
+  document.getElementById('f-pago-moneda').value = 'ARS';
+  document.getElementById('f-pago-cot').value = '';
+  document.getElementById('f-pago-cot-box').style.display = 'none';
   goBack();
 }
 
