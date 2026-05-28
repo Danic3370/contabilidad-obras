@@ -626,12 +626,8 @@ async function onMonedaChange(selectId, boxId, refId) {
 // ---- UTILS ----
 function fmt(n, moneda = 'ARS') {
   if (n == null) return '—';
-  const abs = Math.abs(n);
-  const str = abs >= 1000000
-    ? (abs / 1000000).toFixed(1) + 'M'
-    : abs >= 1000 ? (abs / 1000).toFixed(0) + 'k' : abs.toLocaleString('es-AR');
   const prefix = moneda === 'USD' ? 'u$d ' : '$';
-  return (n < 0 ? '-' : '') + prefix + str;
+  return (n < 0 ? '-' : '') + prefix + Math.abs(n).toLocaleString('es-AR');
 }
 
 function fmtFull(n, moneda = 'ARS') {
