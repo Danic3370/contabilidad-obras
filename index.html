@@ -130,6 +130,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
 .prog-wrap{background:#ebebeb;border-radius:3px;height:5px;margin-top:8px;overflow:hidden}
 .prog-fill{height:100%;background:var(--blue);border-radius:3px;transition:width .3s}
 
+/* Card action buttons (edit / delete) */
+.card-acts{display:flex;gap:4px;justify-content:flex-end;margin-top:6px}
+.ca{background:none;border:none;cursor:pointer;padding:5px 7px;border-radius:7px;font-size:14px;color:var(--sub);line-height:1;transition:background .15s}
+.ca:active{background:#f2f2f7}.ca-del{color:var(--red)}
+
 /* Divider */
 .div{height:0.5px;background:#ebebeb;margin:12px 0}
 
@@ -256,9 +261,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
     <div class="content">
       <div class="grid2">
         <div class="metric"><div class="m-lbl">Caja obra</div><div class="m-val ok" id="det-caja">—</div></div>
-        <div class="metric"><div class="m-lbl">Por cobrar</div><div class="m-val warn" id="det-cobrar">—</div></div>
-        <div class="metric"><div class="m-lbl">A pagar contratistas</div><div class="m-val err" id="det-pagar">—</div></div>
-        <div class="metric"><div class="m-lbl">Materiales</div><div class="m-val purp" id="det-mat">—</div></div>
+        <div class="metric"><div class="m-lbl">Total cobrado</div><div class="m-val ok" id="det-cobrar">—</div></div>
+        <div class="metric"><div class="m-lbl">Pagado cont.</div><div class="m-val err" id="det-pagar">—</div></div>
+        <div class="metric"><div class="m-lbl">En materiales</div><div class="m-val purp" id="det-mat">—</div></div>
       </div>
       <div class="btn-row">
         <button class="btn-sm btn-sm-blue" onclick="go('p-presup-nuevo');setPresupContext(currentObraId)">+ Presupuesto</button>
@@ -355,7 +360,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
 
   <!-- COBROS FORM -->
   <div class="page" id="p-cobros-form">
-    <div class="tb"><div class="tb-row"><span class="back" onclick="goBack()"><i class="ti ti-arrow-left"></i> Volver</span><div class="tb-title">Registrar cobro</div><div style="width:44px"></div></div></div>
+    <div class="tb"><div class="tb-row"><span class="back" onclick="goBack()"><i class="ti ti-arrow-left"></i> Volver</span><div class="tb-title" id="cobro-form-title">Registrar cobro</div><div style="width:44px"></div></div></div>
     <div class="content">
       <div class="field"><label>Tipo de cobro</label>
         <select id="f-cobro-tipo">
@@ -375,8 +380,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
       </div>
       <div class="field"><label>Fecha</label><input type="date" id="f-cobro-fecha"/></div>
       <div class="field"><label>Notas</label><textarea id="f-cobro-notas" placeholder="Observaciones..."></textarea></div>
-      <button class="btn-main" onclick="saveCobro()">Registrar cobro</button>
+      <button class="btn-main" onclick="saveCobro()">Guardar cobro</button>
       <button class="btn-ghost" onclick="goBack()">Cancelar</button>
+      <div id="cobro-form-delete" style="display:none"><div class="div"></div><button class="btn-danger" onclick="deleteCobro(editCobro?.id)">Eliminar cobro</button></div>
     </div>
   </div>
 
@@ -388,7 +394,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
 
   <!-- MATERIALES FORM -->
   <div class="page" id="p-materiales-form">
-    <div class="tb"><div class="tb-row"><span class="back" onclick="goBack()"><i class="ti ti-arrow-left"></i> Volver</span><div class="tb-title">Registrar compra</div><div style="width:44px"></div></div></div>
+    <div class="tb"><div class="tb-row"><span class="back" onclick="goBack()"><i class="ti ti-arrow-left"></i> Volver</span><div class="tb-title" id="mat-form-title">Registrar compra</div><div style="width:44px"></div></div></div>
     <div class="content">
       <div class="field"><label>Obra *</label><select id="f-mat-obra" onchange="loadCajaForMat(this.value)"><option value="">Elegí una obra...</option></select></div>
       <div id="f-mat-caja-box"></div>
@@ -404,14 +410,15 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
       <div class="field"><label>Fecha</label><input type="date" id="f-mat-fecha"/></div>
       <div class="field"><label>Notas</label><textarea id="f-mat-notas" placeholder="Observaciones..."></textarea></div>
       <div class="info-box ib-amber">Si no hay caja disponible, el gasto quedará como adelanto tuyo a recuperar.</div>
-      <button class="btn-main" onclick="saveMaterial()">Registrar compra</button>
+      <button class="btn-main" onclick="saveMaterial()">Guardar compra</button>
       <button class="btn-ghost" onclick="goBack()">Cancelar</button>
+      <div id="mat-form-delete" style="display:none"><div class="div"></div><button class="btn-danger" onclick="deleteMaterial(editMaterial?.id)">Eliminar compra</button></div>
     </div>
   </div>
 
   <!-- PAGO CONTRATISTA FORM -->
   <div class="page" id="p-pago-form">
-    <div class="tb"><div class="tb-row"><span class="back" onclick="goBack()"><i class="ti ti-arrow-left"></i> Volver</span><div class="tb-title">Pago a contratista</div><div style="width:44px"></div></div></div>
+    <div class="tb"><div class="tb-row"><span class="back" onclick="goBack()"><i class="ti ti-arrow-left"></i> Volver</span><div class="tb-title" id="pago-form-title">Pago a contratista</div><div style="width:44px"></div></div></div>
     <div class="content">
       <div class="field"><label>Contratista *</label><select id="f-pago-contratista" onchange="loadPresupsByContratista(this.value)"><option value="">Seleccionar...</option></select></div>
       <div class="field"><label>Obra *</label><select id="f-pago-obra" onchange="loadCajaForPago(this.value)"><option value="">Elegí una obra...</option></select></div>
@@ -426,9 +433,11 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
         <div class="field"><label>Cotización utilizada ($ por USD)</label><input type="number" id="f-pago-cot" placeholder="Ej: 1380"/></div>
       </div>
       <div class="info-box ib-amber">Si el monto supera la caja disponible, el excedente se registra como adelanto tuyo a recuperar.</div>
+      <div class="field"><label>Fecha</label><input type="date" id="f-pago-fecha"/></div>
       <div class="field"><label>Notas</label><textarea id="f-pago-notas" placeholder="Observaciones..."></textarea></div>
-      <button class="btn-main" onclick="savePago()">Registrar pago</button>
+      <button class="btn-main" onclick="savePago()">Guardar pago</button>
       <button class="btn-ghost" onclick="goBack()">Cancelar</button>
+      <div id="pago-form-delete" style="display:none"><div class="div"></div><button class="btn-danger" onclick="deletePago(editPago?.id)">Eliminar pago</button></div>
     </div>
   </div>
 
@@ -485,6 +494,9 @@ let editContratista = null;
 let editPresup = null;
 let allObras = [];
 let allContratistas = [];
+let editCobro = null;
+let editMaterial = null;
+let editPago = null;
 
 // ---- NAVEGACIÓN ----
 function go(id) {
@@ -745,9 +757,24 @@ async function loadObraDetalle(id) {
 
   const totalMat = (mats || []).reduce((s, m) => s + m.monto, 0);
 
-  document.getElementById('det-cobrar').textContent = fmt(porCobrar);
-  document.getElementById('det-pagar').textContent = fmt(aPagar);
-  document.getElementById('det-mat').textContent = fmt(totalMat);
+  // Métricas directamente del view (ya convertidas a ARS)
+  document.getElementById('det-cobrar').textContent = fmt(cajaDat?.total_cobrado || 0);
+  document.getElementById('det-pagar').textContent = fmt(cajaDat?.total_pagado_contratistas || 0);
+  document.getElementById('det-mat').textContent = fmt(cajaDat?.total_materiales || 0);
+
+  // Advertencia: registros USD sin cotizacion (cuentan como $0 en el cálculo)
+  const sinCot = [
+    ...(cobros||[]).filter(c=>c.moneda==='USD'&&!c.cotizacion).map(_=>'cobro'),
+    ...(pagos||[]).filter(p=>p.moneda==='USD'&&!p.cotizacion).map(_=>'pago'),
+    ...(mats||[]).filter(m=>m.moneda==='USD'&&!m.cotizacion).map(_=>'material'),
+  ];
+  const warnEl = document.getElementById('det-usd-warn') || (() => {
+    const el = document.createElement('div'); el.id = 'det-usd-warn';
+    document.querySelector('#p-obra-detalle .content').prepend(el); return el;
+  })();
+  warnEl.innerHTML = sinCot.length > 0
+    ? `<div class="info-box ib-amber"><strong>⚠ ${sinCot.length} registro(s) USD sin cotización</strong> — contabilizan como $0. Editá cada uno para ingresarla y la caja se recalculará.</div>`
+    : '';
 
   // Maps para barras de progreso
   const cobradoByPresup = {};
@@ -778,7 +805,7 @@ async function loadObraDetalle(id) {
       }
       const pct = base > 0 ? Math.min(cobradoP / base * 100, 100) : 0;
       return `
-        <div class="card" onclick="openPresupEdit('${p.id}')">
+        <div class="card">
           <div class="c-row">
             <div>
               <div class="c-title">${p.concepto}${p.contratistas ? ' · ' + p.contratistas.nombre : ''}</div>
@@ -788,6 +815,10 @@ async function loadObraDetalle(id) {
             <div><div class="c-amt">${fmtFull(p.monto, p.moneda)}</div></div>
           </div>
           <div class="prog-wrap"><div class="prog-fill" style="width:${pct.toFixed(1)}%"></div></div>
+          <div class="card-acts">
+            <button class="ca" onclick="openPresupEdit('${p.id}')"><i class="ti ti-edit"></i></button>
+            <button class="ca ca-del" onclick="deletePresupuestoById('${p.id}')"><i class="ti ti-trash"></i></button>
+          </div>
         </div>`;
     }).join('');
   }
@@ -919,6 +950,10 @@ async function openContratistaDetalle(id) {
             </div>
             <div class="c-amt">${fmtFull(p.monto, p.moneda)}</div>
           </div>
+          <div class="card-acts">
+            <button class="ca" onclick="openPresupEdit('${p.id}')"><i class="ti ti-edit"></i></button>
+            <button class="ca ca-del" onclick="deletePresupuestoById('${p.id}')"><i class="ti ti-trash"></i></button>
+          </div>
         </div>`).join('');
 
   const { data: pagos } = await db.from('pagos_contratistas').select('*, obras(cliente)').eq('contratista_id', id).order('fecha', { ascending: false }).limit(10);
@@ -930,6 +965,10 @@ async function openContratistaDetalle(id) {
           <div class="c-row">
             <div><div class="c-title">${p.obras?.cliente || 'Obra'}</div><div class="c-sub">${p.fecha}</div></div>
             <div class="c-amt err">-${fmtFull(p.monto, p.moneda)}</div>
+          </div>
+          <div class="card-acts">
+            <button class="ca" onclick="openPagoEdit('${p.id}')"><i class="ti ti-edit"></i></button>
+            <button class="ca ca-del" onclick="deletePago('${p.id}')"><i class="ti ti-trash"></i></button>
           </div>
         </div>`).join('');
 }
@@ -1079,11 +1118,30 @@ async function deletePresupuesto() {
 async function initCobroForm() {
   const { data: obras } = await db.from('obras').select('id, cliente, nombre').order('cliente');
   const sel = document.getElementById('f-cobro-obra');
-  const cur = sel.value;
   sel.innerHTML = '<option value="">Elegí una obra...</option>' +
     (obras || []).map(o => `<option value="${o.id}">${o.cliente} · ${o.nombre}</option>`).join('');
-  if (cur) { sel.value = cur; loadPresupsByCobro(cur); }
-  document.getElementById('f-cobro-fecha').value = today();
+  const titleEl = document.getElementById('cobro-form-title');
+  const delEl = document.getElementById('cobro-form-delete');
+  if (editCobro) {
+    titleEl.textContent = 'Editar cobro'; delEl.style.display = 'block';
+    document.getElementById('f-cobro-tipo').value = editCobro.tipo;
+    sel.value = editCobro.obra_id;
+    loadPresupsByCobro(editCobro.obra_id);
+    setTimeout(() => { document.getElementById('f-cobro-presup').value = editCobro.presupuesto_id || ''; }, 250);
+    document.getElementById('f-cobro-monto').value = editCobro.monto;
+    document.getElementById('f-cobro-moneda').value = editCobro.moneda;
+    if (editCobro.moneda === 'USD') {
+      document.getElementById('f-cobro-cot-box').style.display = '';
+      document.getElementById('f-cobro-cot').value = editCobro.cotizacion || '';
+    } else { document.getElementById('f-cobro-cot-box').style.display = 'none'; }
+    document.getElementById('f-cobro-fecha').value = editCobro.fecha || today();
+    document.getElementById('f-cobro-notas').value = editCobro.notas || '';
+  } else {
+    titleEl.textContent = 'Registrar cobro'; delEl.style.display = 'none';
+    const cur = sel.value;
+    if (cur) { loadPresupsByCobro(cur); }
+    document.getElementById('f-cobro-fecha').value = today();
+  }
 }
 
 function setCobrosObraContext(obraId) {
@@ -1116,15 +1174,18 @@ async function saveCobro() {
     presupuesto_id: document.getElementById('f-cobro-presup').value || null,
     tipo: document.getElementById('f-cobro-tipo').value,
     monto: parseFloat(document.getElementById('f-cobro-monto').value) || 0,
-    moneda,
-    cotizacion,
+    moneda, cotizacion,
     fecha: document.getElementById('f-cobro-fecha').value || today(),
     notas: document.getElementById('f-cobro-notas').value.trim() || null,
   };
   if (!payload.obra_id || !payload.monto) { toast('Completá obra y monto.', false); return; }
-  const { error } = await db.from('cobros').insert(payload);
+  const id = editCobro?.id;
+  const { error } = id
+    ? await db.from('cobros').update(payload).eq('id', id)
+    : await db.from('cobros').insert(payload);
   if (error) { toast('Error al guardar.', false); return; }
-  toast('Cobro registrado.');
+  toast(id ? 'Cobro actualizado.' : 'Cobro registrado.');
+  editCobro = null;
   document.getElementById('f-cobro-monto').value = '';
   document.getElementById('f-cobro-notas').value = '';
   document.getElementById('f-cobro-cot').value = '';
@@ -1150,6 +1211,10 @@ async function loadCobrosList() {
         </div>
         <div class="c-amt ok">+${fmtFull(c.monto, c.moneda)}</div>
       </div>
+      <div class="card-acts">
+        <button class="ca" onclick="openCobroEdit('${c.id}')"><i class="ti ti-edit"></i></button>
+        <button class="ca ca-del" onclick="deleteCobro('${c.id}')"><i class="ti ti-trash"></i></button>
+      </div>
     </div>`).join('');
 }
 
@@ -1157,11 +1222,28 @@ async function loadCobrosList() {
 async function initMatForm() {
   const { data: obras } = await db.from('obras').select('id, cliente, nombre').order('cliente');
   const sel = document.getElementById('f-mat-obra');
-  const cur = sel.value;
   sel.innerHTML = '<option value="">Elegí una obra...</option>' +
     (obras || []).map(o => `<option value="${o.id}">${o.cliente} · ${o.nombre}</option>`).join('');
-  if (cur) { sel.value = cur; loadCajaForMat(cur); }
-  document.getElementById('f-mat-fecha').value = today();
+  const titleEl = document.getElementById('mat-form-title');
+  const delEl = document.getElementById('mat-form-delete');
+  if (editMaterial) {
+    titleEl.textContent = 'Editar compra'; delEl.style.display = 'block';
+    sel.value = editMaterial.obra_id; loadCajaForMat(editMaterial.obra_id);
+    document.getElementById('f-mat-desc').value = editMaterial.descripcion;
+    document.getElementById('f-mat-monto').value = editMaterial.monto;
+    document.getElementById('f-mat-moneda').value = editMaterial.moneda;
+    if (editMaterial.moneda === 'USD') {
+      document.getElementById('f-mat-cot-box').style.display = '';
+      document.getElementById('f-mat-cot').value = editMaterial.cotizacion || '';
+    } else { document.getElementById('f-mat-cot-box').style.display = 'none'; }
+    document.getElementById('f-mat-fecha').value = editMaterial.fecha || today();
+    document.getElementById('f-mat-notas').value = editMaterial.notas || '';
+  } else {
+    titleEl.textContent = 'Registrar compra'; delEl.style.display = 'none';
+    const cur = sel.value;
+    if (cur) { loadCajaForMat(cur); }
+    document.getElementById('f-mat-fecha').value = today();
+  }
 }
 
 function setMatObraContext(obraId) {
@@ -1200,9 +1282,13 @@ async function saveMaterial() {
     notas: document.getElementById('f-mat-notas').value.trim() || null,
   };
   if (!payload.descripcion) { toast('Ingresá una descripción.', false); return; }
-  const { error } = await db.from('materiales').insert(payload);
+  const id = editMaterial?.id;
+  const { error } = id
+    ? await db.from('materiales').update(payload).eq('id', id)
+    : await db.from('materiales').insert(payload);
   if (error) { toast('Error al guardar.', false); return; }
-  toast(payload.es_adelanto ? 'Registrado como adelanto tuyo.' : 'Compra registrada.');
+  toast(id ? 'Compra actualizada.' : payload.es_adelanto ? 'Registrado como adelanto tuyo.' : 'Compra registrada.');
+  editMaterial = null;
   document.getElementById('f-mat-desc').value = '';
   document.getElementById('f-mat-monto').value = '';
   document.getElementById('f-mat-notas').value = '';
@@ -1231,6 +1317,10 @@ async function loadMaterialesList() {
           <div class="c-hint ${m.es_adelanto ? 'err' : 'ok'}">${m.es_adelanto ? 'adelanto tuyo' : 'cubierto por caja'}</div>
         </div>
       </div>
+      <div class="card-acts">
+        <button class="ca" onclick="openMaterialEdit('${m.id}')"><i class="ti ti-edit"></i></button>
+        <button class="ca ca-del" onclick="deleteMaterial('${m.id}')"><i class="ti ti-trash"></i></button>
+      </div>
     </div>`).join('');
 }
 
@@ -1242,15 +1332,33 @@ async function initPagoForm() {
   ]);
   const contSel = document.getElementById('f-pago-contratista');
   const obraSel = document.getElementById('f-pago-obra');
-  const curCont = contSel.value;
-  const curObra = obraSel.value;
   contSel.innerHTML = '<option value="">Seleccionar...</option>' +
     (conts || []).map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
   obraSel.innerHTML = '<option value="">Elegí una obra...</option>' +
     (obras || []).map(o => `<option value="${o.id}">${o.cliente} · ${o.nombre}</option>`).join('');
-  if (curCont) contSel.value = curCont;
-  if (curObra) { obraSel.value = curObra; loadCajaForPago(curObra); }
-  document.getElementById('f-pago-fecha').value = today();
+  const titleEl = document.getElementById('pago-form-title');
+  const delEl = document.getElementById('pago-form-delete');
+  if (editPago) {
+    titleEl.textContent = 'Editar pago'; delEl.style.display = 'block';
+    contSel.value = editPago.contratista_id || '';
+    obraSel.value = editPago.obra_id || ''; loadCajaForPago(editPago.obra_id);
+    loadPresupsByContratista(editPago.contratista_id);
+    setTimeout(() => { document.getElementById('f-pago-presup').value = editPago.presupuesto_id || ''; }, 250);
+    document.getElementById('f-pago-monto').value = editPago.monto;
+    document.getElementById('f-pago-moneda').value = editPago.moneda;
+    if (editPago.moneda === 'USD') {
+      document.getElementById('f-pago-cot-box').style.display = '';
+      document.getElementById('f-pago-cot').value = editPago.cotizacion || '';
+    } else { document.getElementById('f-pago-cot-box').style.display = 'none'; }
+    document.getElementById('f-pago-fecha').value = editPago.fecha || today();
+    document.getElementById('f-pago-notas').value = editPago.notas || '';
+  } else {
+    titleEl.textContent = 'Pago a contratista'; delEl.style.display = 'none';
+    const curCont = contSel.value; const curObra = obraSel.value;
+    if (curCont) contSel.value = curCont;
+    if (curObra) { obraSel.value = curObra; loadCajaForPago(curObra); }
+    document.getElementById('f-pago-fecha').value = today();
+  }
 }
 
 function setPagoObraContext(obraId) {
@@ -1305,13 +1413,58 @@ async function savePago() {
     es_adelanto: caja < montoARS,
     notas: document.getElementById('f-pago-notas').value.trim() || null,
   };
-  const { error } = await db.from('pagos_contratistas').insert(payload);
+  const id = editPago?.id;
+  const { error } = id
+    ? await db.from('pagos_contratistas').update(payload).eq('id', id)
+    : await db.from('pagos_contratistas').insert(payload);
   if (error) { toast('Error al guardar.', false); return; }
-  toast(payload.es_adelanto ? 'Pago registrado (excede caja, queda como adelanto).' : 'Pago registrado.');
+  toast(id ? 'Pago actualizado.' : payload.es_adelanto ? 'Pago registrado (excede caja, queda como adelanto).' : 'Pago registrado.');
+  editPago = null;
   document.getElementById('f-pago-moneda').value = 'ARS';
   document.getElementById('f-pago-cot').value = '';
   document.getElementById('f-pago-cot-box').style.display = 'none';
   goBack();
+}
+
+// ---- EDITAR / ELIMINAR REGISTROS ----
+async function openCobroEdit(id) {
+  const { data } = await db.from('cobros').select('*').eq('id', id).single();
+  editCobro = data; go('p-cobros-form');
+}
+async function deleteCobro(id) {
+  if (!id || !confirm('¿Eliminar este cobro?')) return;
+  await db.from('cobros').delete().eq('id', id);
+  toast('Cobro eliminado.'); editCobro = null;
+  if (currentPage === 'p-cobros-form') goBack(); else onPageEnter(currentPage);
+}
+
+async function openMaterialEdit(id) {
+  const { data } = await db.from('materiales').select('*').eq('id', id).single();
+  editMaterial = data; go('p-materiales-form');
+}
+async function deleteMaterial(id) {
+  if (!id || !confirm('¿Eliminar esta compra?')) return;
+  await db.from('materiales').delete().eq('id', id);
+  toast('Compra eliminada.'); editMaterial = null;
+  if (currentPage === 'p-materiales-form') goBack(); else onPageEnter(currentPage);
+}
+
+async function openPagoEdit(id) {
+  const { data } = await db.from('pagos_contratistas').select('*').eq('id', id).single();
+  editPago = data; go('p-pago-form');
+}
+async function deletePago(id) {
+  if (!id || !confirm('¿Eliminar este pago?')) return;
+  await db.from('pagos_contratistas').delete().eq('id', id);
+  toast('Pago eliminado.'); editPago = null;
+  if (currentPage === 'p-pago-form') goBack(); else onPageEnter(currentPage);
+}
+
+async function deletePresupuestoById(id) {
+  if (!id || !confirm('¿Eliminar este presupuesto?')) return;
+  await db.from('presupuestos').delete().eq('id', id);
+  toast('Presupuesto eliminado.');
+  onPageEnter(currentPage);
 }
 
 // ---- LISTAS POR OBRA ----
@@ -1329,6 +1482,10 @@ async function loadObraCobros(obraId) {
           <div class="c-sub">${c.fecha}${c.notas ? ' · ' + c.notas : ''}</div>
         </div>
         <div class="c-amt ok">+${fmtFull(c.monto, c.moneda)}</div>
+      </div>
+      <div class="card-acts">
+        <button class="ca" onclick="openCobroEdit('${c.id}')"><i class="ti ti-edit"></i></button>
+        <button class="ca ca-del" onclick="deleteCobro('${c.id}')"><i class="ti ti-trash"></i></button>
       </div>
     </div>`).join('');
 }
@@ -1349,6 +1506,10 @@ async function loadObraPagos(obraId) {
         </div>
         <div class="c-amt err">-${fmtFull(p.monto, p.moneda)}</div>
       </div>
+      <div class="card-acts">
+        <button class="ca" onclick="openPagoEdit('${p.id}')"><i class="ti ti-edit"></i></button>
+        <button class="ca ca-del" onclick="deletePago('${p.id}')"><i class="ti ti-trash"></i></button>
+      </div>
     </div>`).join('');
 }
 
@@ -1367,6 +1528,10 @@ async function loadObraMateriales(obraId) {
           ${m.es_adelanto ? '<span class="badge b-pau">adelanto tuyo</span>' : ''}
         </div>
         <div class="c-amt err">-${fmtFull(m.monto, m.moneda)}</div>
+      </div>
+      <div class="card-acts">
+        <button class="ca" onclick="openMaterialEdit('${m.id}')"><i class="ti ti-edit"></i></button>
+        <button class="ca ca-del" onclick="deleteMaterial('${m.id}')"><i class="ti ti-trash"></i></button>
       </div>
     </div>`).join('');
 }
