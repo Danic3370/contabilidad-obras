@@ -716,7 +716,7 @@ async function loadObras() {
     <div class="card" onclick="openObraDetalle('${o.id}')">
       <div class="c-row">
         <div><div class="c-title">${o.cliente}</div><div class="c-sub">${o.nombre}</div>${badgeObra(o.estado)}</div>
-        <div><div class="c-amt ${o.moneda==='Ambas' ? 'ok' : o.caja >= 0 ? 'ok' : 'err'}">${o.moneda==='Ambas' ? 'ver detalle' : fmt(o.caja)}</div><div class="c-hint ${o.caja >= 0 ? 'ok' : 'err'}">${o.caja >= 0 ? 'en caja' : 'negativo'}</div></div>
+        <div><div class="c-amt ${o.caja >= 0 ? 'ok' : 'err'}">${fmt(o.caja)}</div><div class="c-hint ${o.caja >= 0 ? 'ok' : 'err'}">${o.caja >= 0 ? 'en caja' : 'negativo'}</div></div>
       </div>
     </div>`).join('');
 }
@@ -739,42 +739,23 @@ async function loadObraDetalle(id) {
 
   document.getElementById('det-obra-title').textContent = obra.cliente;
 
-  // Cálculo de caja según moneda de la obra
-  if (obra.moneda === 'Ambas') {
-    // Dual currency: USD y ARS por separado
-    const cobrosUSD = (cobros||[]).filter(c => c.moneda==='USD' && c.tipo !== 'Honorarios').reduce((s,c) => s+c.monto, 0);
-    const pagosUSD  = (pagos||[]).filter(p => p.moneda==='USD').reduce((s,p) => s+p.monto, 0);
-    const matUSD    = (mats||[]).filter(m => m.cotizacion).reduce((s,m) => s + m.monto/m.cotizacion, 0);
-    const saldoUSD  = Math.round(cobrosUSD - pagosUSD - matUSD);
-
-    const cobrosARS = (cobros||[]).filter(c => c.moneda==='ARS').reduce((s,c) => s+c.monto, 0);
-    const saldoARS  = cobrosARS;
-
-    const grid = document.querySelector('#p-obra-detalle .grid2');
-    grid.innerHTML = `
-      <div class="metric"><div class="m-lbl">Saldo USD</div><div class="m-val ${saldoUSD>=0?'ok':'err'}" id="det-caja">${fmt(saldoUSD,'USD')}</div></div>
-      <div class="metric"><div class="m-lbl">Saldo ARS</div><div class="m-val ${saldoARS>=0?'ok':'err'}" id="det-caja-ars">${fmt(saldoARS)}</div></div>
-      <div class="metric"><div class="m-lbl">Pagado cont.</div><div class="m-val err" id="det-pagar">${fmt(cajaDat?.total_pagado_contratistas||0)}</div></div>
-      <div class="metric"><div class="m-lbl">En materiales</div><div class="m-val purp" id="det-mat">${fmt(cajaDat?.total_materiales||0)}</div></div>
-    `;
-  } else {
-    const caja = cajaDat?.caja || 0;
-    document.getElementById('det-caja').textContent = fmt(caja);
-    document.getElementById('det-caja').className = 'm-val ' + (caja >= 0 ? 'ok' : 'err');
-    document.getElementById('det-cobrar').textContent = fmt(cajaDat?.total_cobrado || 0);
-    document.getElementById('det-pagar').textContent = fmt(cajaDat?.total_pagado_contratistas || 0);
-    document.getElementById('det-mat').textContent = fmt(cajaDat?.total_materiales || 0);
-  }
+  // Cálculo de caja
+  const caja = cajaDat?.caja || 0;
+  document.getElementById('det-caja').textContent = fmt(caja);
+  document.getElementById('det-caja').className = 'm-val ' + (caja >= 0 ? 'ok' : 'err');
+  document.getElementById('det-cobrar').textContent = fmt(cajaDat?.total_cobrado || 0);
+  document.getElementById('det-pagar').textContent = fmt(cajaDat?.total_pagado_contratistas || 0);
+  document.getElementById('det-mat').textContent = fmt(cajaDat?.total_materiales || 0);
 
   const totalPresupAprobado = (presups || []).filter(p => p.estado === 'Aprobado').reduce((s, p) => s + p.monto, 0);
   const totalCobradoFull = (cobros || []).reduce((s, c) => s + c.monto, 0);
 
-  // Advertencia: registros USD sin cotizacion (solo obras ARS/USD puras, no Ambas)
-  const sinCot = obra.moneda !== 'Ambas' ? [
+  // Advertencia: registros USD sin cotizacion
+  const sinCot = [
     ...(cobros||[]).filter(c=>c.moneda==='USD'&&!c.cotizacion).map(_=>'cobro'),
     ...(pagos||[]).filter(p=>p.moneda==='USD'&&!p.cotizacion).map(_=>'pago'),
     ...(mats||[]).filter(m=>m.moneda==='USD'&&!m.cotizacion).map(_=>'material'),
-  ] : [];
+  ];
   const warnEl = document.getElementById('det-usd-warn') || (() => {
     const el = document.createElement('div'); el.id = 'det-usd-warn';
     document.querySelector('#p-obra-detalle .content').prepend(el); return el;
