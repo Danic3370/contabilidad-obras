@@ -278,6 +278,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
     </div>
   </div>
 
+  <!-- PRESUP DETALLE -->
+  <div class="page" id="p-presup-detalle">
+    <div class="tb"><div class="tb-row"><span class="back" onclick="goBack()"><i class="ti ti-arrow-left"></i> Volver</span><div class="tb-title" id="pd-title">Presupuesto</div><span class="act-r" onclick="openPresupEdit(currentPresupId)">Editar</span></div></div>
+    <div class="content" id="pd-content"><div class="loading">Cargando...</div></div>
+  </div>
+
   <!-- PRESUP FORM -->
   <div class="page" id="p-presup-nuevo">
     <div class="tb"><div class="tb-row"><span class="back" onclick="goBack()"><i class="ti ti-arrow-left"></i> Volver</span><div class="tb-title" id="presup-form-title">Nuevo presupuesto</div><div style="width:44px"></div></div></div>
@@ -548,6 +554,7 @@ function onPageEnter(id) {
   else if (id === 'p-obra-materiales') loadObraMateriales(currentObraId);
   else if (id === 'p-contratista-detalle') loadContratistaDetalle(currentContratistaId);
   else if (id === 'p-obra-detalle') loadObraDetalle(currentObraId);
+  else if (id === 'p-presup-detalle') loadPresupDetalle(currentPresupId);
 }
 
 // ---- AUTH ----
@@ -795,7 +802,7 @@ async function loadObraDetalle(id) {
       }
       const pct = base > 0 ? Math.min(cobradoP / base * 100, 100) : 0;
       return `
-        <div class="card" onclick="openPresupEdit('${p.id}')">
+        <div class="card" onclick="openPresupDetalle('${p.id}')">
           <div class="c-row">
             <div>
               <div class="c-title">${p.concepto}${p.contratistas ? ' · ' + p.contratistas.nombre : ''}</div>
@@ -997,6 +1004,97 @@ async function deleteContratista() {
   await db.from('contratistas').delete().eq('id', id);
   toast('Contratista eliminado.');
   go('p-contratistas');
+}
+
+// ---- PRESUPUESTO DETALLE ----
+let currentPresupId = null;
+
+async function openPresupDetalle(id) {
+  currentPresupId = id;
+  go('p-presup-detalle');
+}
+
+async function loadPresupDetalle(id) {
+  const content = document.getElementById('pd-content');
+  content.innerHTML = '<div class="loading">Cargando...</div>';
+
+  const [{ data: p }, { data: cobros }, { data: pagos }] = await Promise.all([
+    db.from('presupuestos').select('*, obras(cliente, nombre), contratistas(nombre)').eq('id', id).single(),
+    db.from('cobros').select('monto, moneda, cotizacion, fecha, tipo').eq('presupuesto_id', id),
+    db.from('pagos_contratistas').select('monto, moneda, cotizacion, fecha').eq('presupuesto_id', id),
+  ]);
+
+  if (!p) { content.innerHTML = '<div class="empty"><p>No se encontró el presupuesto.</p></div>'; return; }
+
+  document.getElementById('pd-title').textContent = p.tipo === 'Honorarios' ? 'Honorarios' : 'Mano de obra';
+
+  const esMO = p.tipo === 'Mano de obra';
+  const base = esMO ? (p.costo_contratista || 0) : p.monto;
+
+  // Calcular cobrado/pagado asociado a este presupuesto
+  let movTotal = 0;
+  const movimientos = esMO ? (pagos || []) : (cobros || []);
+  movimientos.forEach(r => {
+    movTotal += r.moneda === 'USD' && r.cotizacion ? r.monto * r.cotizacion : (r.moneda === 'ARS' ? r.monto : 0);
+  });
+  const pct = base > 0 ? Math.min(movTotal / base * 100, 100) : 0;
+  const resto = Math.max(base - movTotal, 0);
+
+  const rows = [
+    ['Obra', `${p.obras?.cliente || '—'} · ${p.obras?.nombre || ''}`],
+    ['Concepto', p.concepto],
+    ['Tipo', p.tipo],
+    ...(esMO && p.contratistas ? [['Contratista', p.contratistas.nombre]] : []),
+    ['Monto total', fmtFull(p.monto, p.moneda)],
+    ...(esMO ? [
+      ['Costo contratista', fmtFull(p.costo_contratista, p.moneda)],
+      ['Tu beneficio', fmtFull(p.monto - (p.costo_contratista || 0), p.moneda)],
+    ] : []),
+    ['Moneda', p.moneda],
+    ['Fecha emisión', p.fecha_emision || '—'],
+    ['Estado', p.estado],
+    ...(p.notas ? [['Notas', p.notas]] : []),
+  ];
+
+  const movLabel = esMO ? 'Pagado al contratista' : 'Cobrado';
+  const restoLabel = esMO ? 'Saldo pendiente a pagar' : 'Por cobrar';
+
+  content.innerHTML = `
+    <div class="card" style="cursor:default">
+      ${rows.map(([lbl, val]) => `
+        <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:0.5px solid #f0f0f0;font-size:13px">
+          <span style="color:#888">${lbl}</span>
+          <span style="font-weight:500;text-align:right;max-width:60%">${lbl === 'Estado' ? badgePresup(val) : val}</span>
+        </div>`).join('')}
+    </div>
+
+    <div class="sec">${esMO ? 'Avance de pago al contratista' : 'Avance de cobro'}</div>
+    <div class="card" style="cursor:default">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+        <span style="color:#888">${movLabel}</span>
+        <span class="ok" style="font-weight:500">${fmtFull(movTotal)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px">
+        <span style="color:#888">${restoLabel}</span>
+        <span class="${resto > 0 ? 'warn' : 'ok'}" style="font-weight:500">${fmtFull(resto)}</span>
+      </div>
+      <div class="prog-wrap"><div class="prog-fill" style="width:${pct.toFixed(1)}%"></div></div>
+      <div style="font-size:10px;color:#888;margin-top:5px;text-align:right">${pct.toFixed(0)}% completado</div>
+    </div>
+
+    ${movimientos.length > 0 ? `
+      <div class="sec">${esMO ? 'Pagos registrados' : 'Cobros registrados'}</div>
+      ${movimientos.map(r => {
+        const ars = r.moneda === 'USD' && r.cotizacion ? r.monto * r.cotizacion : r.monto;
+        return `<div class="card" style="cursor:default">
+          <div class="c-row">
+            <div><div class="c-title">${r.tipo || (esMO ? 'Pago' : 'Cobro')}</div><div class="c-sub">${r.fecha || ''}</div></div>
+            <div class="c-amt ${esMO ? 'err' : 'ok'}">${esMO ? '-' : '+'}${fmtFull(r.monto, r.moneda)}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    ` : `<div class="empty" style="padding:20px"><i class="ti ti-clock"></i><p style="margin-top:8px">Sin ${esMO ? 'pagos' : 'cobros'} registrados.</p></div>`}
+  `;
 }
 
 // ---- PRESUPUESTOS ----
