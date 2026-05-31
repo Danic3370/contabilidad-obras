@@ -546,7 +546,7 @@ function onPageEnter(id) {
   else if (id === 'p-obra-cobros') loadObraCobros(currentObraId);
   else if (id === 'p-obra-pagos') loadObraPagos(currentObraId);
   else if (id === 'p-obra-materiales') loadObraMateriales(currentObraId);
-  else if (id === 'p-contratista-detalle') openContratistaDetalle(currentContratistaId);
+  else if (id === 'p-contratista-detalle') loadContratistaDetalle(currentContratistaId);
   else if (id === 'p-obra-detalle') loadObraDetalle(currentObraId);
 }
 
@@ -920,6 +920,9 @@ function renderContratistaForm() {
 async function openContratistaDetalle(id) {
   currentContratistaId = id;
   go('p-contratista-detalle');
+}
+
+async function loadContratistaDetalle(id) {
   const { data: c } = await db.from('deuda_contratistas').select('*').eq('id', id).single();
   document.getElementById('det-cont-title').textContent = c.nombre;
   document.getElementById('det-cont-deuda').innerHTML = c.deuda > 0
