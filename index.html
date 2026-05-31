@@ -546,6 +546,8 @@ function onPageEnter(id) {
   else if (id === 'p-obra-cobros') loadObraCobros(currentObraId);
   else if (id === 'p-obra-pagos') loadObraPagos(currentObraId);
   else if (id === 'p-obra-materiales') loadObraMateriales(currentObraId);
+  else if (id === 'p-contratista-detalle') openContratistaDetalle(currentContratistaId);
+  else if (id === 'p-obra-detalle') loadObraDetalle(currentObraId);
 }
 
 // ---- AUTH ----
@@ -770,18 +772,12 @@ async function loadObraDetalle(id) {
     if (c.presupuesto_id) cobradoByPresup[c.presupuesto_id] = (cobradoByPresup[c.presupuesto_id] || 0) + c.monto;
   });
   const pagadoByPresup = {};
-  const pagadoByContratista = {};
   (pagos || []).forEach(p => {
-    const m = (p.moneda === 'USD' && p.cotizacion) ? p.monto * p.cotizacion : p.monto;
     if (p.presupuesto_id) {
+      const m = (p.moneda === 'USD' && p.cotizacion) ? p.monto * p.cotizacion : p.monto;
       pagadoByPresup[p.presupuesto_id] = (pagadoByPresup[p.presupuesto_id] || 0) + m;
     }
-    if (p.contratista_id) {
-      pagadoByContratista[p.contratista_id] = (pagadoByContratista[p.contratista_id] || 0) + m;
-    }
   });
-  // Total cobrado en honorarios (fallback cuando cobros no tienen presupuesto_id)
-  const totalCobradoHonorarios = (cobros||[]).filter(c=>c.tipo==='Honorarios').reduce((s,c)=>s+c.monto,0);
 
   // Presupuestos con barra de progreso real
   const detPresup = document.getElementById('det-presup-list');
@@ -791,15 +787,15 @@ async function loadObraDetalle(id) {
     detPresup.innerHTML = presups.map(p => {
       let cobradoP = 0, base = 0;
       if (p.tipo === 'Honorarios') {
-        cobradoP = cobradoByPresup[p.id] || totalCobradoHonorarios;
+        cobradoP = cobradoByPresup[p.id] || 0;
         base = p.monto;
       } else {
-        cobradoP = pagadoByPresup[p.id] || (p.contratista_id ? pagadoByContratista[p.contratista_id] || 0 : 0);
+        cobradoP = pagadoByPresup[p.id] || 0;
         base = p.costo_contratista || 0;
       }
       const pct = base > 0 ? Math.min(cobradoP / base * 100, 100) : 0;
       return `
-        <div class="card">
+        <div class="card" onclick="openPresupEdit('${p.id}')">
           <div class="c-row">
             <div>
               <div class="c-title">${p.concepto}${p.contratistas ? ' · ' + p.contratistas.nombre : ''}</div>
@@ -1427,7 +1423,8 @@ async function openCobroEdit(id) {
 }
 async function deleteCobro(id) {
   if (!id || !confirm('¿Eliminar este cobro?')) return;
-  await db.from('cobros').delete().eq('id', id);
+  const { error } = await db.from('cobros').delete().eq('id', id);
+  if (error) { toast('Error al eliminar.', false); return; }
   toast('Cobro eliminado.'); editCobro = null;
   if (currentPage === 'p-cobros-form') goBack(); else onPageEnter(currentPage);
 }
@@ -1438,7 +1435,8 @@ async function openMaterialEdit(id) {
 }
 async function deleteMaterial(id) {
   if (!id || !confirm('¿Eliminar esta compra?')) return;
-  await db.from('materiales').delete().eq('id', id);
+  const { error } = await db.from('materiales').delete().eq('id', id);
+  if (error) { toast('Error al eliminar.', false); return; }
   toast('Compra eliminada.'); editMaterial = null;
   if (currentPage === 'p-materiales-form') goBack(); else onPageEnter(currentPage);
 }
@@ -1449,7 +1447,8 @@ async function openPagoEdit(id) {
 }
 async function deletePago(id) {
   if (!id || !confirm('¿Eliminar este pago?')) return;
-  await db.from('pagos_contratistas').delete().eq('id', id);
+  const { error } = await db.from('pagos_contratistas').delete().eq('id', id);
+  if (error) { toast('Error al eliminar.', false); return; }
   toast('Pago eliminado.'); editPago = null;
   if (currentPage === 'p-pago-form') goBack(); else onPageEnter(currentPage);
 }
