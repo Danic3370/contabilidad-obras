@@ -740,7 +740,7 @@ async function loadObraDetalle(id) {
   const [{ data: obra }, { data: cajaDat }, { data: presups }, { data: cobros }, { data: pagos }, { data: mats }] = await Promise.all([
     db.from('obras').select('*').eq('id', id).single(),
     db.from('caja_obras').select('*').eq('id', id).single(),
-    db.from('presupuestos').select('*, contratistas(nombre)').eq('obra_id', id).order('created_at', { ascending: false }),
+    db.from('presupuestos').select('*, contratistas(nombre)').eq('obra_id', id).order('tipo').order('created_at', { ascending: false }),
     db.from('cobros').select('*').eq('obra_id', id).order('fecha', { ascending: false }),
     db.from('pagos_contratistas').select('*, contratistas(nombre)').eq('obra_id', id).order('fecha', { ascending: false }),
     db.from('materiales').select('*').eq('obra_id', id).order('fecha', { ascending: false }),
