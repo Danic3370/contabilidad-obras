@@ -1635,6 +1635,29 @@ document.getElementById('dash-fecha').textContent = new Date().toLocaleDateStrin
   weekday: 'long', day: 'numeric', month: 'long'
 });
 
+// ---- SWIPE BACK (gesto iOS) ----
+(function() {
+  let startX = 0, startY = 0, active = false;
+
+  document.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    startX = t.clientX;
+    startY = t.clientY;
+    // Solo activar si el toque empieza en el borde izquierdo (primeros 30px)
+    active = startX < 30 && pageHistory.length > 0;
+  }, { passive: true });
+
+  document.addEventListener('touchend', e => {
+    if (!active) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startX;
+    const dy = Math.abs(t.clientY - startY);
+    // Swipe derecho > 80px y más horizontal que vertical
+    if (dx > 80 && dy < dx * 0.6) goBack();
+    active = false;
+  }, { passive: true });
+})();
+
 // Registrar service worker
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
