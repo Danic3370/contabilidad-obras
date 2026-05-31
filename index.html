@@ -801,6 +801,8 @@ async function loadObraDetalle(id) {
         base = p.costo_contratista || 0;
       }
       const pct = base > 0 ? Math.min(cobradoP / base * 100, 100) : 0;
+      const adeudado = Math.max(base - cobradoP, 0);
+      const movLabel = p.tipo === 'Honorarios' ? 'Cobrado' : 'Pagado';
       return `
         <div class="card" onclick="openPresupDetalle('${p.id}')">
           <div class="c-row">
@@ -809,12 +811,19 @@ async function loadObraDetalle(id) {
               <div class="c-sub">${p.fecha_emision || ''}</div>
               ${badgePresup(p.estado)}
             </div>
-            <div><div class="c-amt">${fmtFull(p.monto, p.moneda)}</div></div>
+            <div style="text-align:right">
+              <div class="c-amt">${fmtFull(p.monto, p.moneda)}</div>
+              <div class="c-hint ok">${movLabel}: ${fmtFull(cobradoP)}</div>
+              <div class="c-hint err">Adeuda: ${fmtFull(adeudado)}</div>
+            </div>
           </div>
-          <div class="prog-wrap"><div class="prog-fill" style="width:${pct.toFixed(1)}%"></div></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+            <div class="prog-wrap" style="flex:1;margin:0"><div class="prog-fill" style="width:${pct.toFixed(1)}%"></div></div>
+            <span style="font-size:10px;color:var(--sub);flex-shrink:0">${pct.toFixed(0)}%</span>
+          </div>
           <div class="card-acts">
-            <button class="ca" onclick="openPresupEdit('${p.id}')"><i class="ti ti-edit"></i></button>
-            <button class="ca ca-del" onclick="deletePresupuestoById('${p.id}')"><i class="ti ti-trash"></i></button>
+            <button class="ca" onclick="event.stopPropagation();openPresupEdit('${p.id}')"><i class="ti ti-edit"></i></button>
+            <button class="ca ca-del" onclick="event.stopPropagation();deletePresupuestoById('${p.id}')"><i class="ti ti-trash"></i></button>
           </div>
         </div>`;
     }).join('');
@@ -936,25 +945,52 @@ async function loadContratistaDetalle(id) {
     ? `<div class="info-box ib-red">Deuda total: ${fmtFull(c.deuda)} ARS</div>`
     : `<div class="info-box ib-green">Al día — sin deuda pendiente.</div>`;
 
-  const { data: presups } = await db.from('presupuestos').select('*, obras(cliente, nombre)').eq('contratista_id', id).order('created_at', { ascending: false });
+  const [{ data: presups }, { data: todosPagos }] = await Promise.all([
+    db.from('presupuestos').select('*, obras(cliente, nombre)').eq('contratista_id', id).order('created_at', { ascending: false }),
+    db.from('pagos_contratistas').select('presupuesto_id, monto, moneda, cotizacion').eq('contratista_id', id),
+  ]);
+
+  // Mapa de pagado por presupuesto
+  const pagadoByPresup = {};
+  (todosPagos || []).forEach(p => {
+    if (p.presupuesto_id) {
+      const m = p.moneda === 'USD' && p.cotizacion ? p.monto * p.cotizacion : p.monto;
+      pagadoByPresup[p.presupuesto_id] = (pagadoByPresup[p.presupuesto_id] || 0) + m;
+    }
+  });
+
   const presupList = document.getElementById('det-cont-presups');
   presupList.innerHTML = (presups || []).length === 0
     ? `<div class="empty"><i class="ti ti-file-text"></i><p>Sin presupuestos.</p></div>`
-    : (presups || []).map(p => `
-        <div class="card">
+    : (presups || []).map(p => {
+        const base = p.costo_contratista || 0;
+        const pagado = pagadoByPresup[p.id] || 0;
+        const pct = base > 0 ? Math.min(pagado / base * 100, 100) : 0;
+        const adeudado = Math.max(base - pagado, 0);
+        return `
+        <div class="card" onclick="openPresupDetalle('${p.id}')">
           <div class="c-row">
             <div>
               <div class="c-title">${p.concepto}</div>
               <div class="c-sub">${p.obras?.cliente || ''} · ${p.obras?.nombre || ''}</div>
               ${badgePresup(p.estado)}
             </div>
-            <div class="c-amt">${fmtFull(p.monto, p.moneda)}</div>
+            <div style="text-align:right">
+              <div class="c-amt">${fmtFull(p.monto, p.moneda)}</div>
+              <div class="c-hint ok">Pagado: ${fmtFull(pagado)}</div>
+              <div class="c-hint err">Adeuda: ${fmtFull(adeudado)}</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+            <div class="prog-wrap" style="flex:1;margin:0"><div class="prog-fill" style="width:${pct.toFixed(1)}%"></div></div>
+            <span style="font-size:10px;color:var(--sub);flex-shrink:0">${pct.toFixed(0)}%</span>
           </div>
           <div class="card-acts">
-            <button class="ca" onclick="openPresupEdit('${p.id}')"><i class="ti ti-edit"></i></button>
-            <button class="ca ca-del" onclick="deletePresupuestoById('${p.id}')"><i class="ti ti-trash"></i></button>
+            <button class="ca" onclick="event.stopPropagation();openPresupEdit('${p.id}')"><i class="ti ti-edit"></i></button>
+            <button class="ca ca-del" onclick="event.stopPropagation();deletePresupuestoById('${p.id}')"><i class="ti ti-trash"></i></button>
           </div>
-        </div>`).join('');
+        </div>`;
+      }).join('');
 
   const { data: pagos } = await db.from('pagos_contratistas').select('*, obras(cliente)').eq('contratista_id', id).order('fecha', { ascending: false }).limit(10);
   const pagosList = document.getElementById('det-cont-pagos');
