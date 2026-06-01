@@ -1076,7 +1076,7 @@ async function loadPresupDetalle(id) {
   const [{ data: p }, { data: cobros }, { data: pagos }] = await Promise.all([
     db.from('presupuestos').select('*, obras(cliente, nombre), contratistas(nombre)').eq('id', id).single(),
     db.from('cobros').select('monto, moneda, cotizacion, fecha, tipo').eq('presupuesto_id', id),
-    db.from('pagos_contratistas').select('monto, moneda, cotizacion, fecha').eq('presupuesto_id', id),
+    db.from('pagos_contratistas').select('monto, moneda, cotizacion, fecha, beneficio_arquitecto').eq('presupuesto_id', id),
   ]);
 
   if (!p) { content.innerHTML = '<div class="empty"><p>No se encontró el presupuesto.</p></div>'; return; }
@@ -1086,14 +1086,21 @@ async function loadPresupDetalle(id) {
   const esMO = p.tipo === 'Mano de obra';
   const base = esMO ? (p.costo_contratista || 0) : p.monto;
 
-  // Calcular cobrado/pagado asociado a este presupuesto
+  // Calcular pagado al contratista y beneficio cobrado
   let movTotal = 0;
+  let beneficioCobrado = 0;
   const movimientos = esMO ? (pagos || []) : (cobros || []);
   movimientos.forEach(r => {
     movTotal += r.moneda === 'USD' && r.cotizacion ? r.monto * r.cotizacion : (r.moneda === 'ARS' ? r.monto : 0);
+    if (esMO) beneficioCobrado += r.beneficio_arquitecto || 0;
   });
   const pct = base > 0 ? Math.min(movTotal / base * 100, 100) : 0;
   const resto = Math.max(base - movTotal, 0);
+
+  // Beneficio planificado y pendiente (solo MO)
+  const beneficioPlanificado = esMO ? Math.max((p.monto || 0) - (p.costo_contratista || 0), 0) : 0;
+  const beneficioPendiente = Math.max(beneficioPlanificado - beneficioCobrado, 0);
+  const pctBen = beneficioPlanificado > 0 ? Math.min(beneficioCobrado / beneficioPlanificado * 100, 100) : 0;
 
   const rows = [
     ['Obra', `${p.obras?.cliente || '—'} · ${p.obras?.nombre || ''}`],
@@ -1137,14 +1144,38 @@ async function loadPresupDetalle(id) {
       <div style="font-size:10px;color:#888;margin-top:5px;text-align:right">${pct.toFixed(0)}% completado</div>
     </div>
 
+    ${esMO && beneficioPlanificado > 0 ? `
+    <div class="sec">Tu beneficio en esta obra</div>
+    <div class="card" style="cursor:default">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+        <span style="color:#888">Beneficio planificado</span>
+        <span style="font-weight:500">${fmtFull(beneficioPlanificado)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+        <span style="color:#888">Ya cobrado</span>
+        <span class="ok" style="font-weight:500">${fmtFull(beneficioCobrado)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:10px">
+        <span style="color:#888">Pendiente de cobrar</span>
+        <span class="${beneficioPendiente > 0 ? 'warn' : 'ok'}" style="font-weight:500">${fmtFull(beneficioPendiente)}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="prog-wrap" style="flex:1;margin:0"><div class="prog-fill" style="width:${pctBen.toFixed(1)}%;background:var(--green)"></div></div>
+        <span style="font-size:10px;color:var(--sub);flex-shrink:0">${pctBen.toFixed(0)}%</span>
+      </div>
+    </div>` : ''}
+
     ${movimientos.length > 0 ? `
       <div class="sec">${esMO ? 'Pagos registrados' : 'Cobros registrados'}</div>
       ${movimientos.map(r => {
-        const ars = r.moneda === 'USD' && r.cotizacion ? r.monto * r.cotizacion : r.monto;
+        const ben = r.beneficio_arquitecto || 0;
         return `<div class="card" style="cursor:default">
           <div class="c-row">
             <div><div class="c-title">${r.tipo || (esMO ? 'Pago' : 'Cobro')}</div><div class="c-sub">${r.fecha || ''}</div></div>
-            <div class="c-amt ${esMO ? 'err' : 'ok'}">${esMO ? '-' : '+'}${fmtFull(r.monto, r.moneda)}</div>
+            <div style="text-align:right">
+              <div class="c-amt ${esMO ? 'err' : 'ok'}">${esMO ? '-' : '+'}${fmtFull(r.monto, r.moneda)}</div>
+              ${ben > 0 ? `<div class="c-hint ok">+ beneficio ${fmtFull(ben)}</div>` : ''}
+            </div>
           </div>
         </div>`;
       }).join('')}
@@ -1484,7 +1515,7 @@ function actualizarTotalPago() {
   const box = document.getElementById('f-pago-total-box');
   if (ben > 0) {
     box.innerHTML = `<div class="info-box ib-blue" style="margin-bottom:10px">
-      Al contratista: <strong>${fmt(monto)}</strong> &nbsp;+&nbsp; Tu beneficio: <strong>${fmt(ben)}</strong> &nbsp;=&nbsp; Total caja: <strong>${fmt(monto + ben)}</strong>
+      Al contratista: <strong>${fmt(monto)}</strong> &nbsp;+&nbsp; Tu beneficio: <strong>${fmt(ben)}</strong> &nbsp;=&nbsp; Total del pago: <strong>${fmt(monto + ben)}</strong>
     </div>`;
   } else {
     box.innerHTML = '';
