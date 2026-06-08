@@ -1982,15 +1982,6 @@ async function generarReporteObra(obraId) {
     db.from('materiales').select('*').eq('obra_id', obraId).order('fecha', { ascending: true })
   ]);
 
-  // Load logo via fetch if not already cached from buildReciboHTML
-  if (!_logoGlobal) {
-    try {
-      const r = await fetch('logo_crop_b64.txt');
-      const b64 = (await r.text()).trim();
-      _logoGlobal = b64.startsWith('data:') ? b64 : 'data:image/png;base64,' + b64;
-    } catch(e) { _logoGlobal = ''; }
-  }
-
   const html = buildReporteHTML({
     obra: obra || {},
     caja: caja || {},
@@ -1998,7 +1989,7 @@ async function generarReporteObra(obraId) {
     cobros: cobros || [],
     pagos: pagos || [],
     mats: mats || [],
-    logo: _logoGlobal
+    baseUrl: window.location.href
   });
 
   const w = window.open('', '_blank');
@@ -2008,7 +1999,7 @@ async function generarReporteObra(obraId) {
   setTimeout(() => w.print(), 800);
 }
 
-function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
+function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, baseUrl }) {
   const toARS = (monto, moneda, cot) => {
     if (!monto) return 0;
     if (moneda === 'ARS') return monto;
@@ -2019,7 +2010,7 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
   const fechaHoy = new Date().toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
 
   // ---- Métricas resumen ----
-  const totalPagadoMO = pagos.reduce((s, p) => s + toARS(p.monto, p.moneda, p.cotizacion), 0);
+  const totalPagadoMO = pagos.reduce((s, p) => s + toARS(p.monto, p.moneda, p.cotizacion) + (p.beneficio_arquitecto || 0), 0);
   const totalMateriales = mats.reduce((s, m) => s + toARS(m.monto, m.moneda, m.cotizacion), 0);
   const totalGastado = totalPagadoMO + totalMateriales;
   const cajaDisponible = caja.caja != null ? caja.caja : 0;
@@ -2074,11 +2065,15 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
     contMap[cid].presups.push(p);
   });
 
-  // Sum pagos by contratista_id
+  // Sum pagos + beneficio by contratista_id; también guardar lista para desglose
   const pagadoByCont = {};
+  const pagosByCont = {};
   pagos.forEach(p => {
     const cid = p.contratista_id || '__ninguno__';
-    pagadoByCont[cid] = (pagadoByCont[cid] || 0) + toARS(p.monto, p.moneda, p.cotizacion);
+    const montoConBenef = toARS(p.monto, p.moneda, p.cotizacion) + (p.beneficio_arquitecto || 0);
+    pagadoByCont[cid] = (pagadoByCont[cid] || 0) + montoConBenef;
+    if (!pagosByCont[cid]) pagosByCont[cid] = [];
+    pagosByCont[cid].push({ fecha: p.fecha, notas: p.notas, moneda: p.moneda, monto: p.monto, beneficio: p.beneficio_arquitecto || 0, _total: montoConBenef });
   });
 
   // Also add contratistas that have pagos but no presupuestos in this obra
@@ -2111,12 +2106,29 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
 
     const presupCol = sumPresup > 0 ? fm(sumPresup) : '—';
 
+    // Desglose de pagos individuales
+    const pagsOfCont = pagosByCont[cid] || [];
+    const pagoRows = pagsOfCont.map(pg => {
+      const desc = pg.notas ? _escHtml(pg.notas) : 'Pago';
+      const usd = pg.moneda === 'USD' ? ' <span class="usd">(u$d ' + (pg.monto||0).toLocaleString('es-AR') + ')</span>' : '';
+      return '<tr class="pago-row">'
+        + '<td style="padding-left:14px;font-size:9pt;color:#444">' + (pg.fecha||'') + ' &nbsp;·&nbsp; ' + desc + usd + '</td>'
+        + '<td></td>'
+        + '<td class="num ok" style="font-size:9pt">' + fm(pg._total) + '</td>'
+        + '<td></td>'
+        + '</tr>';
+    }).join('');
+
+    const pagoSection = pagsOfCont.length > 0
+      ? '<tr><td colspan="4" class="pago-subhead">Pagos realizados</td></tr>' + pagoRows
+      : '<tr><td colspan="4" class="pago-subhead" style="color:#aaa;font-style:italic">Sin pagos registrados</td></tr>';
+
     moSections += '<table class="tbl" style="margin-bottom:10px">'
       + '<thead>'
       + '<tr><th colspan="4" class="cont-header">' + _escHtml(cont.nombre) + '</th></tr>'
       + '<tr><th>Concepto</th><th class="num">Presupuesto</th><th class="num">Pagado</th><th class="num">Adeuda</th></tr>'
       + '</thead>'
-      + '<tbody>' + rows + '</tbody>'
+      + '<tbody>' + rows + pagoSection + '</tbody>'
       + '<tfoot><tr class="tftr">'
       + '<td><strong>Total</strong></td>'
       + '<td class="num"><strong>' + presupCol + '</strong></td>'
@@ -2183,7 +2195,9 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
     '.tbl .ok{color:#1a7a3c;font-weight:600}',
     '.tbl .warn{color:#b06a00;font-weight:600}',
     '.tftr td{background:#f0f0f7!important;border-top:1.5px solid #185FA5;padding:5px 8px;font-size:9.5pt}',
-    '.cont-header{background:#3a4a80!important;text-align:left;font-weight:600;font-size:9.5pt}',
+    '.cont-header{background:#3a4a80!important;text-align:left;font-weight:600;font-size:9.5pt;color:#fff!important}',
+    '.pago-subhead{background:#eef0f8!important;font-size:8.5pt;font-weight:600;color:#555;padding:4px 8px;letter-spacing:0.3px;text-transform:uppercase}',
+    '.pago-row td{background:#f7f8ff!important;border-bottom:0.5px solid #e8eaf0}',
     '.usd{font-size:8.5pt;color:#888;font-style:italic}',
     '.tag-estado{font-size:8.5pt;color:#aaa}',
     '.empty-note{color:#888;font-size:9.5pt;margin:4px 0 12px;font-style:italic}',
@@ -2192,6 +2206,7 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
   ].join('');
 
   return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>'
+    + '<base href="' + (baseUrl || '') + '"/>'
     + '<title>Reporte de Obra – ' + _escHtml(obra.cliente) + '</title>'
     + '<style>' + css + '</style></head><body>'
     + '<div class="nav">'
@@ -2205,7 +2220,7 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
     + '<span class="l1">Arq. Daniel Cardigni &mdash; Matr&iacute;cula 30288</span>'
     + '<span class="l2">Calle 11 n690 &nbsp;&mdash;&nbsp; Tel. 11 28522111</span>'
     + '</div>'
-    + '<img class="hlogo" src="' + (logo || '') + '" alt=""/>'
+    + '<img class="hlogo" src="logo_crop.png" alt=""/>'
     + '</div>'
     + '<div class="rep-title">REPORTE DE OBRA</div>'
     + '<div class="rep-sub">'
