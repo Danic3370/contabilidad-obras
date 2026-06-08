@@ -2174,31 +2174,34 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
   const css = [
     '*{box-sizing:border-box;margin:0;padding:0}',
     'html,body{background:#d8d8d8;font-family:Arial,Helvetica,sans-serif;color:#222;font-size:10pt}',
-    /* nav (solo pantalla) */
+    /* nav — solo pantalla */
     '.nav{position:fixed;top:0;left:0;right:0;height:50px;background:#F07800;display:flex;align-items:center;justify-content:space-between;padding:0 16px;z-index:999}',
     '.nb{background:rgba(255,255,255,.22);border:none;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}',
     '.nb2{background:#fff;color:#F07800;font-weight:700}',
     '.nt{color:#fff;font-size:14px;font-weight:700}',
-    /* wrap / hoja */
+    /* wrap / hoja — pantalla */
     '.wrap{margin-top:62px;display:flex;justify-content:center;padding:16px 0 40px}',
     '.page{background:#fff;width:210mm;min-height:297mm;padding:14mm 17mm 17mm 17mm;box-shadow:0 2px 18px rgba(0,0,0,.28)}',
+    /* tabla-documento: en pantalla es bloque, en print activa el thead-repeat */
+    '.doc-table{width:100%;border-collapse:collapse;border-spacing:0}',
+    '.doc-table>thead>tr>td,.doc-table>tbody>tr>td{padding:0;border:none;vertical-align:top}',
     /* encabezado de hoja */
     '.hbox{display:flex;justify-content:space-between;align-items:center;background:#e8e8e8;border:1px solid #999;padding:8px 12px;margin-bottom:10px}',
     '.htxt .l1{font-size:11pt;font-weight:bold;text-decoration:underline;display:block;line-height:1.8}',
     '.htxt .l2{font-size:10pt;font-weight:bold;text-decoration:underline;display:block;line-height:1.8}',
     '.hlogo{width:64px;height:64px;object-fit:contain}',
-    /* título del documento — tope absoluto de tamaño */
+    /* título del doc — tope 14pt */
     '.rep-title{font-size:14pt;font-weight:bold;text-align:center;letter-spacing:0.4px;margin-bottom:4px;color:#222}',
     '.rep-sub{font-size:9.5pt;text-align:center;color:#555;margin-bottom:11px;padding-bottom:8px;border-bottom:2px solid #F5B800;line-height:1.7}',
-    /* tarjetas resumen */
+    /* tarjetas */
     '.cards{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}',
     '.card-item{border:1.5px solid #F5B800;border-radius:4px;padding:8px 10px;background:#FFFBF0}',
     '.card-lbl{font-size:7.5pt;color:#777;margin-bottom:2px;text-transform:uppercase;letter-spacing:0.4px}',
     '.card-val{font-size:13pt;font-weight:bold;color:#F07800;line-height:1.2}',
     '.card-val.green{color:#2a7a3c}.card-val.red{color:#c0392b}',
-    /* títulos de sección — 11pt, nunca mayor al título del doc (14pt) */
+    /* sección titles — 11pt, siempre < 14pt del título doc */
     '.sec-title{font-size:11pt;font-weight:bold;background:#F07800;color:#fff;padding:4px 8px;margin:12px 0 5px;break-after:avoid;page-break-after:avoid}',
-    /* sección: intenta no partirse; si es más alta que una hoja, se parte entre filas */
+    /* bloque que no se parte (a menos que sea más alto que una página) */
     '.rsec{break-inside:avoid;page-break-inside:avoid}',
     /* tablas */
     '.tbl{width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:3px}',
@@ -2210,11 +2213,10 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
     '.tbl .num{text-align:right;white-space:nowrap}',
     '.tbl .ok{color:#2a7a3c;font-weight:600}',
     '.tbl .warn{color:#b06a00;font-weight:600}',
-    /* pie de tabla totales */
     '.tftr td{background:#FFF3E0!important;border-top:2px solid #F07800;padding:5px 8px;font-size:9pt}',
-    /* nombre contratista: 10pt amarillo — siempre < 11pt del sec-title */
+    /* contratista: 10pt amarillo — siempre < 11pt sec-title */
     '.cont-header{background:#F5B800!important;color:#333!important;text-align:left;font-weight:700;font-size:10pt;padding:5px 8px}',
-    /* sub-encabezados "PAGOS REALIZADOS": 8pt, siempre < 10pt del cont-header */
+    /* pagos / cobros sub-rows: 8pt — siempre < 10pt cont-header */
     '.pago-subhead{background:#FFF8E0!important;font-size:8pt;font-weight:700;color:#8a5a00;padding:4px 8px;letter-spacing:0.4px;text-transform:uppercase;border-bottom:1px solid #F5B800}',
     '.pago-row td{background:#FFFDF5!important;border-bottom:0.5px solid #f0e8cc;font-size:8.5pt}',
     '.cobro-row td{background:#FFF8E0!important;border-bottom:0.5px solid #f0e8cc;font-size:8.5pt}',
@@ -2223,17 +2225,20 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
     '.empty-note{color:#aaa;font-size:9pt;margin:4px 0 8px;font-style:italic}',
     '.firma{margin-top:32px;border-top:1.5px solid #F07800;width:240px;padding-top:5px;font-size:9pt;color:#444}',
     /* ---- PRINT ---- */
+    /* iOS Safari: @page fija los márgenes reales de la hoja */
     '@media print{',
-    'html,body{background:#fff}',
+    '@page{size:A4 portrait;margin:14mm 16mm 16mm 16mm}',
+    'html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}',
     '.nav{display:none!important}',
-    '.wrap{margin-top:0;padding:0;display:block}',
-    /* hoja: sin box-shadow, sin padding-top (el encabezado fijo lo pone) */
-    '.page{width:100%;min-height:auto;padding:0 13mm 13mm 13mm;box-shadow:none}',
-    /* encabezado fijo en cada página impresa */
-    '.hbox{position:fixed;top:0;left:0;right:0;z-index:999;padding:5mm 13mm;background:#e8e8e8;border-bottom:1px solid #999;margin-bottom:0}',
-    /* espacio para que el contenido no quede debajo del encabezado fijo */
-    '.page-body{margin-top:25mm}',
-    '@page{size:A4;margin:0}',
+    '.wrap{margin:0;padding:0;display:block}',
+    /* la hoja no tiene padding propio: los márgenes vienen del @page */
+    '.page{width:100%;min-height:auto;padding:0;box-shadow:none;background:#fff}',
+    /* la tabla-documento activa el encabezado repetido en cada página */
+    '.doc-table{width:100%;display:table}',
+    '.doc-table thead{display:table-header-group}',
+    '.doc-table tbody{display:table-row-group}',
+    /* sin margin-top extra, el @page margin ya dejó el espacio */
+    '.page-body{margin-top:0}',
     '}'
   ].join('');
 
@@ -2273,6 +2278,15 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
     + '<button class="nb nb2" onclick="window.print()">Guardar PDF</button>'
     + '</div>'
     + '<div class="wrap"><div class="page">'
+    /*
+      doc-table: en pantalla se comporta como bloque normal.
+      En print, <thead> usa display:table-header-group => repite el encabezado
+      en cada página impresa (estándar CSS, funciona en iOS Safari).
+      Sin position:fixed => sin solapamientos ni cortes.
+    */
+    + '<table class="doc-table" cellspacing="0" cellpadding="0">'
+    /* ENCABEZADO REPETIDO EN CADA PÁGINA */
+    + '<thead><tr><td>'
     + '<div class="hbox">'
     + '<div class="htxt">'
     + '<span class="l1">Arq. Daniel Cardigni &mdash; Matr&iacute;cula 30288</span>'
@@ -2280,7 +2294,9 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
     + '</div>'
     + logoTag
     + '</div>'
-    /* page-body: tiene margin-top en print para dejar espacio al encabezado fijo */
+    + '</td></tr></thead>'
+    /* CUERPO DEL DOCUMENTO */
+    + '<tbody><tr><td>'
     + '<div class="page-body">'
     + '<div class="rep-title">REPORTE DE OBRA</div>'
     + '<div class="rep-sub">'
@@ -2302,6 +2318,8 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
     + '<div class="rsec"><div class="sec-title">Materiales</div>' + matTable + '</div>'
     + '<div class="firma">Firma<br/><strong>Arq. Daniel Cardigni &mdash; Mat. 30288</strong></div>'
     + '</div>'   /* /page-body */
+    + '</td></tr></tbody>'
+    + '</table>'
     + '</div></div>'
     + '</body></html>';
 }
