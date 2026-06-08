@@ -1964,6 +1964,25 @@ function _escHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+async function _getLogoDataUrl() {
+  if (_logoGlobal) return _logoGlobal;
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        c.getContext('2d').drawImage(img, 0, 0);
+        _logoGlobal = c.toDataURL('image/png');
+      } catch(e) { _logoGlobal = ''; }
+      resolve(_logoGlobal);
+    };
+    img.onerror = () => { _logoGlobal = ''; resolve(''); };
+    img.src = 'Logo.png';
+  });
+}
+
 async function generarReporteObra(obraId) {
   toast('Generando reporte...');
   const [
@@ -1972,14 +1991,16 @@ async function generarReporteObra(obraId) {
     { data: presups },
     { data: cobros },
     { data: pagos },
-    { data: mats }
+    { data: mats },
+    logo
   ] = await Promise.all([
     db.from('obras').select('*').eq('id', obraId).single(),
     db.from('caja_obras').select('*').eq('id', obraId).single(),
     db.from('presupuestos').select('*, contratistas(id, nombre)').eq('obra_id', obraId).order('tipo').order('created_at', { ascending: true }),
     db.from('cobros').select('*').eq('obra_id', obraId).order('fecha', { ascending: true }),
     db.from('pagos_contratistas').select('*, contratistas(id, nombre)').eq('obra_id', obraId).order('fecha', { ascending: true }),
-    db.from('materiales').select('*').eq('obra_id', obraId).order('fecha', { ascending: true })
+    db.from('materiales').select('*').eq('obra_id', obraId).order('fecha', { ascending: true }),
+    _getLogoDataUrl()
   ]);
 
   const html = buildReporteHTML({
@@ -1989,7 +2010,7 @@ async function generarReporteObra(obraId) {
     cobros: cobros || [],
     pagos: pagos || [],
     mats: mats || [],
-    baseUrl: window.location.href
+    logo
   });
 
   const w = window.open('', '_blank');
@@ -1999,7 +2020,7 @@ async function generarReporteObra(obraId) {
   setTimeout(() => w.print(), 800);
 }
 
-function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, baseUrl }) {
+function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
   const toARS = (monto, moneda, cot) => {
     if (!monto) return 0;
     if (moneda === 'ARS') return monto;
@@ -2164,49 +2185,87 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, baseUrl })
         + '<td class="num"><strong>' + fm(totMat) + '</strong></td>'
         + '</tr></tfoot></table>';
 
-  // ---- CSS ----
+  // ---- CSS — paleta del logo: naranja #F07800 / amarillo #F5B800 ----
   const css = [
     '*{box-sizing:border-box;margin:0;padding:0}',
-    'html,body{background:#e0e0e0;font-family:Arial,Helvetica,sans-serif;color:#111;font-size:10pt}',
-    '.nav{position:fixed;top:0;left:0;right:0;height:50px;background:#185FA5;display:flex;align-items:center;justify-content:space-between;padding:0 16px;z-index:999}',
-    '.nb{background:rgba(255,255,255,.18);border:none;color:#fff;padding:8px 16px;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer}',
-    '.nb2{background:#fff;color:#185FA5}',
-    '.nt{color:#fff;font-size:15px;font-weight:600}',
+    'html,body{background:#d8d8d8;font-family:Arial,Helvetica,sans-serif;color:#222;font-size:10pt}',
+    /* nav */
+    '.nav{position:fixed;top:0;left:0;right:0;height:50px;background:#F07800;display:flex;align-items:center;justify-content:space-between;padding:0 16px;z-index:999}',
+    '.nb{background:rgba(255,255,255,.22);border:none;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}',
+    '.nb2{background:#fff;color:#F07800;font-weight:700}',
+    '.nt{color:#fff;font-size:14px;font-weight:700;letter-spacing:0.3px}',
+    /* wrap / page */
     '.wrap{margin-top:62px;display:flex;justify-content:center;padding:16px 0 40px}',
-    '.page{background:#fff;width:210mm;min-height:297mm;padding:15mm 18mm 18mm 18mm;box-shadow:0 2px 16px rgba(0,0,0,.25)}',
-    '.hbox{display:flex;justify-content:space-between;align-items:center;background:#d4d4d4;border:1px solid #555;padding:9px 12px;margin-bottom:14px}',
-    '.htxt .l1{font-size:11.5pt;font-weight:bold;text-decoration:underline;display:block;line-height:1.75}',
-    '.htxt .l2{font-size:10.5pt;font-weight:bold;text-decoration:underline;display:block;line-height:1.75}',
-    '.hlogo{width:68px;height:68px;object-fit:contain}',
-    '.rep-title{font-size:15pt;font-weight:bold;text-align:center;letter-spacing:0.5px;margin-bottom:4px}',
-    '.rep-sub{font-size:10pt;text-align:center;color:#444;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #ccc;line-height:1.6}',
-    '.cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}',
-    '.card-item{border:1.5px solid #ddd;border-radius:6px;padding:9px 12px}',
-    '.card-lbl{font-size:8pt;color:#666;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.5px}',
-    '.card-val{font-size:14pt;font-weight:bold;color:#185FA5;line-height:1.2}',
-    '.card-val.green{color:#1a7a3c}',
+    '.page{background:#fff;width:210mm;min-height:297mm;padding:14mm 17mm 17mm 17mm;box-shadow:0 2px 18px rgba(0,0,0,.28)}',
+    /* header */
+    '.hbox{display:flex;justify-content:space-between;align-items:center;background:#e8e8e8;border:1px solid #999;padding:9px 12px;margin-bottom:12px}',
+    '.htxt .l1{font-size:11pt;font-weight:bold;text-decoration:underline;display:block;line-height:1.8}',
+    '.htxt .l2{font-size:10pt;font-weight:bold;text-decoration:underline;display:block;line-height:1.8}',
+    '.hlogo{width:66px;height:66px;object-fit:contain}',
+    /* title block — 14pt es el tope */
+    '.rep-title{font-size:14pt;font-weight:bold;text-align:center;letter-spacing:0.5px;margin-bottom:4px;color:#222}',
+    '.rep-sub{font-size:9.5pt;text-align:center;color:#555;margin-bottom:12px;padding-bottom:9px;border-bottom:2px solid #F5B800;line-height:1.7}',
+    /* summary cards */
+    '.cards{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px}',
+    '.card-item{border:1.5px solid #F5B800;border-radius:5px;padding:8px 11px;background:#FFFBF0}',
+    '.card-lbl{font-size:7.5pt;color:#777;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.5px}',
+    '.card-val{font-size:13pt;font-weight:bold;color:#F07800;line-height:1.2}',
+    '.card-val.green{color:#2a7a3c}',
     '.card-val.red{color:#c0392b}',
-    '.sec-title{font-size:11pt;font-weight:bold;border-bottom:2px solid #185FA5;margin:16px 0 8px;padding-bottom:4px;color:#185FA5}',
-    '.tbl{width:100%;border-collapse:collapse;font-size:9.5pt;margin-bottom:4px}',
-    '.tbl th{background:#185FA5;color:#fff;padding:5px 8px;text-align:left;font-size:9pt;font-weight:600}',
-    '.tbl td{padding:4px 8px;border-bottom:0.5px solid #eee;vertical-align:top}',
-    '.tbl tbody tr:nth-child(even) td{background:#f9f9f9}',
-    '.tbl .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}',
-    '.tbl .ok{color:#1a7a3c;font-weight:600}',
+    /* section titles — 11pt es el máximo después del título del doc */
+    '.sec-title{font-size:11pt;font-weight:bold;background:#F07800;color:#fff;padding:4px 8px;margin:14px 0 6px;letter-spacing:0.2px}',
+    /* tables */
+    '.tbl{width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:4px}',
+    /* th de primera fila (columnas): naranja, 9pt */
+    '.tbl thead tr:last-child th{background:#F07800;color:#fff;padding:5px 8px;text-align:left;font-size:9pt;font-weight:700}',
+    '.tbl td{padding:4px 8px;border-bottom:0.5px solid #eee;vertical-align:top;font-size:9pt}',
+    '.tbl tbody tr:nth-child(even) td{background:#fafafa}',
+    '.tbl .num{text-align:right;white-space:nowrap}',
+    '.tbl .ok{color:#2a7a3c;font-weight:600}',
     '.tbl .warn{color:#b06a00;font-weight:600}',
-    '.tftr td{background:#f0f0f7!important;border-top:1.5px solid #185FA5;padding:5px 8px;font-size:9.5pt}',
-    '.cont-header{background:#3a4a80!important;text-align:left;font-weight:600;font-size:9.5pt;color:#fff!important}',
-    '.pago-subhead{background:#eef0f8!important;font-size:8.5pt;font-weight:600;color:#555;padding:4px 8px;letter-spacing:0.3px;text-transform:uppercase}',
-    '.pago-row td{background:#f7f8ff!important;border-bottom:0.5px solid #e8eaf0}',
-    '.usd{font-size:8.5pt;color:#888;font-style:italic}',
-    '.tag-estado{font-size:8.5pt;color:#aaa}',
-    '.empty-note{color:#888;font-size:9.5pt;margin:4px 0 12px;font-style:italic}',
-    '.firma{margin-top:40px;border-top:1px solid #000;width:240px;padding-top:5px;font-size:9.5pt;color:#333}',
-    '@media print{html,body{background:#fff}.nav{display:none!important}.wrap{margin-top:0;padding:0;display:block}.page{width:100%;min-height:auto;padding:10mm 14mm 14mm 14mm;box-shadow:none}@page{size:A4;margin:0}}'
+    /* footer de totales */
+    '.tftr td{background:#FFF3E0!important;border-top:2px solid #F07800;padding:5px 8px;font-size:9pt}',
+    /* nombre contratista — 10pt, amarillo, siempre < 11pt del sec-title */
+    '.cont-header{background:#F5B800!important;color:#333!important;text-align:left;font-weight:700;font-size:10pt;padding:5px 8px}',
+    /* "PAGOS REALIZADOS" / "COBROS" sub-encabezado — 8pt, crema */
+    '.pago-subhead{background:#FFF8E0!important;font-size:8pt;font-weight:700;color:#8a5a00;padding:4px 8px;letter-spacing:0.4px;text-transform:uppercase;border-bottom:1px solid #F5B800}',
+    '.pago-row td{background:#FFFDF5!important;border-bottom:0.5px solid #f0e8cc;font-size:8.5pt}',
+    '.cobro-row td{background:#FFF8E0!important;border-bottom:0.5px solid #f0e8cc;font-size:8.5pt}',
+    '.usd{font-size:8pt;color:#999;font-style:italic}',
+    '.tag-estado{font-size:8pt;color:#bbb}',
+    '.empty-note{color:#aaa;font-size:9pt;margin:4px 0 10px;font-style:italic}',
+    '.firma{margin-top:36px;border-top:1.5px solid #F07800;width:240px;padding-top:5px;font-size:9pt;color:#444}',
+    '@media print{html,body{background:#fff}.nav{display:none!important}.wrap{margin-top:0;padding:0;display:block}.page{width:100%;min-height:auto;padding:9mm 13mm 13mm 13mm;box-shadow:none}@page{size:A4;margin:0}}'
   ].join('');
 
+  // ---- Tabla Cobros ----
+  const tipoLabel = { 'Honorarios': 'Honorarios', 'Adelanto mano de obra': 'Adelanto MO', 'Adelanto materiales': 'Adelanto materiales' };
+  let totCobrosTotal = 0;
+  const rowsCobros = cobros.map(c => {
+    const v = toARS(c.monto, c.moneda, c.cotizacion);
+    totCobrosTotal += v;
+    const extra = c.moneda === 'USD' ? ' <span class="usd">(u$d ' + (c.monto||0).toLocaleString('es-AR') + ')</span>' : '';
+    const esHon = c.tipo === 'Honorarios';
+    return '<tr class="cobro-row">'
+      + '<td style="white-space:nowrap">' + (c.fecha||'') + '</td>'
+      + '<td>' + (tipoLabel[c.tipo]||c.tipo) + (c.notas ? ' &nbsp;·&nbsp; <em>' + _escHtml(c.notas) + '</em>' : '') + '</td>'
+      + '<td class="num ok">' + fm(v) + extra + '</td>'
+      + '</tr>';
+  }).join('');
+
+  const cobrosTable = cobros.length === 0
+    ? '<p class="empty-note">Sin cobros registrados.</p>'
+    : '<table class="tbl"><thead>'
+      + '<tr><th colspan="3" class="cont-header" style="background:#F07800!important;color:#fff!important">Detalle de cobros</th></tr>'
+      + '<tr><th style="width:88px">Fecha</th><th>Concepto</th><th class="num">Importe</th></tr>'
+      + '</thead><tbody>' + rowsCobros + '</tbody>'
+      + '<tfoot><tr class="tftr"><td colspan="2"><strong>TOTAL COBRADO</strong></td>'
+      + '<td class="num ok"><strong>' + fm(totCobrosTotal) + '</strong></td>'
+      + '</tr></tfoot></table>';
+
+  const logoTag = logo ? '<img class="hlogo" src="' + logo + '" alt=""/>' : '';
+
   return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>'
-    + '<base href="' + (baseUrl || '') + '"/>'
     + '<title>Reporte de Obra – ' + _escHtml(obra.cliente) + '</title>'
     + '<style>' + css + '</style></head><body>'
     + '<div class="nav">'
@@ -2220,7 +2279,7 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, baseUrl })
     + '<span class="l1">Arq. Daniel Cardigni &mdash; Matr&iacute;cula 30288</span>'
     + '<span class="l2">Calle 11 n690 &nbsp;&mdash;&nbsp; Tel. 11 28522111</span>'
     + '</div>'
-    + '<img class="hlogo" src="logo_crop.png" alt=""/>'
+    + logoTag
     + '</div>'
     + '<div class="rep-title">REPORTE DE OBRA</div>'
     + '<div class="rep-sub">'
@@ -2230,11 +2289,13 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, baseUrl })
     + '<br/>Emitido: ' + fechaHoy
     + '</div>'
     + '<div class="cards">'
-    + '<div class="card-item"><div class="card-lbl">Total dinero gastado</div><div class="card-val">' + fm(totalGastado) + '</div></div>'
+    + '<div class="card-item"><div class="card-lbl">Total cobrado al cliente</div><div class="card-val ok">' + fm(totCobrosTotal) + '</div></div>'
+    + '<div class="card-item"><div class="card-lbl">Dinero en caja disponible</div><div class="card-val ' + (cajaDisponible >= 0 ? 'green' : 'red') + '">' + fm(cajaDisponible) + '</div></div>'
     + '<div class="card-item"><div class="card-lbl">Total pagado mano de obra</div><div class="card-val">' + fm(totalPagadoMO) + '</div></div>'
     + '<div class="card-item"><div class="card-lbl">Total pagado materiales</div><div class="card-val">' + fm(totalMateriales) + '</div></div>'
-    + '<div class="card-item"><div class="card-lbl">Dinero en caja disponible</div><div class="card-val ' + (cajaDisponible >= 0 ? 'green' : 'red') + '">' + fm(cajaDisponible) + '</div></div>'
     + '</div>'
+    + '<div class="sec-title">Cobros al cliente</div>'
+    + cobrosTable
     + '<div class="sec-title">Honorarios</div>'
     + honTable
     + '<div class="sec-title">Mano de Obra</div>'
