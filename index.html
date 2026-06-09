@@ -2365,10 +2365,10 @@ html,body{background:#ccc;font-family:Arial,Helvetica,sans-serif;font-size:10pt;
 @media print{
 html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .nav{display:none!important}
-.viewport{margin:0;padding:0;gap:0}
-.pdf-page{padding:5mm 16mm 15mm 16mm;box-shadow:none;height:auto;overflow:visible;break-after:always;page-break-after:always}
+.viewport{margin:0;padding:0;gap:0;display:block}
+.pdf-page{width:100%;padding:0;box-shadow:none;height:auto;overflow:visible;break-after:always;page-break-after:always}
 .pdf-page:last-child{break-after:avoid;page-break-after:avoid}
-@page{size:A4 portrait;margin:0}}`;
+@page{size:A4 portrait;margin:5mm 16mm 15mm 16mm}}`;
 }
 
 function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
