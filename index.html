@@ -1966,87 +1966,86 @@ function _escHtml(str) {
 }
 
 async function generarReporteObra(obraId) {
-  // Abrir popup sincrónicamente (antes del primer await) para evitar bloqueo en Safari/iOS
-  const w = window.open('', '_blank');
-  if (!w) { toast('Permitir pop-ups para el reporte.', false); return; }
-  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"/>'
-    + '<style>body{margin:0;font-family:Arial,sans-serif;background:#ccc;display:flex;align-items:center;justify-content:center;min-height:100vh}'
-    + 'p{background:#fff;padding:32px 48px;border-radius:12px;color:#F07800;font-size:16px;font-weight:600;box-shadow:0 2px 12px rgba(0,0,0,.2)}'
-    + '</style></head><body><p>Generando reporte...</p></body></html>');
-  w.document.close();
-
   toast('Preparando reporte...');
-  if (!_logoGlobal) buildReciboHTML({ fecha:'', cliente:'', monto:0, moneda:'ARS', concepto:'', efectivo:0, transferencia:0 });
 
-  const [
-    { data: obra }, { data: caja }, { data: presups },
-    { data: cobros }, { data: pagos }, { data: mats }
-  ] = await Promise.all([
-    db.from('obras').select('*').eq('id', obraId).single(),
-    db.from('caja_obras').select('*').eq('id', obraId).single(),
-    db.from('presupuestos').select('*, contratistas(id, nombre)').eq('obra_id', obraId).order('tipo').order('created_at', { ascending: true }),
-    db.from('cobros').select('*').eq('obra_id', obraId).order('fecha', { ascending: true }),
-    db.from('pagos_contratistas').select('*, contratistas(id, nombre)').eq('obra_id', obraId).order('fecha', { ascending: true }),
-    db.from('materiales').select('*').eq('obra_id', obraId).order('fecha', { ascending: true })
-  ]);
+  try {
+    if (!_logoGlobal) buildReciboHTML({ fecha:'', cliente:'', monto:0, moneda:'ARS', concepto:'', efectivo:0, transferencia:0 });
 
-  // Construir secciones
-  const { headerHTML, summaryHTML, sections } = _buildReporteData({
-    obra: obra||{}, caja: caja||{}, presups: presups||[],
-    cobros: cobros||[], pagos: pagos||[], mats: mats||[],
-    logo: _logoGlobal||''
-  });
+    const [
+      { data: obra }, { data: caja }, { data: presups },
+      { data: cobros }, { data: pagos }, { data: mats }
+    ] = await Promise.all([
+      db.from('obras').select('*').eq('id', obraId).single(),
+      db.from('caja_obras').select('*').eq('id', obraId).single(),
+      db.from('presupuestos').select('*, contratistas(id, nombre)').eq('obra_id', obraId).order('tipo').order('created_at', { ascending: true }),
+      db.from('cobros').select('*').eq('obra_id', obraId).order('fecha', { ascending: true }),
+      db.from('pagos_contratistas').select('*, contratistas(id, nombre)').eq('obra_id', obraId).order('fecha', { ascending: true }),
+      db.from('materiales').select('*').eq('obra_id', obraId).order('fecha', { ascending: true })
+    ]);
 
-  // Medir alturas en un div off-screen con position:absolute (el browser calcula layout)
-  const css = _getReporteCSS();
-  const allSecs = [summaryHTML, ...sections];
-  const measurer = document.createElement('div');
-  measurer.style.cssText = 'position:absolute;top:-99999px;left:0;width:673px;background:#fff';
-  measurer.innerHTML = '<style>' + css + '</style>'
-    + allSecs.map((s,i) => '<div id="__rpt' + i + '">' + s + '</div>').join('');
-  document.body.appendChild(measurer);
-  // Esperar fuentes + 2 frames para que el layout esté calculado
-  if (document.fonts && document.fonts.ready) await document.fonts.ready;
-  await new Promise(r => requestAnimationFrame(r));
-  await new Promise(r => requestAnimationFrame(r));
-  const heights = allSecs.map((_,i) => {
-    const el = measurer.querySelector('#__rpt' + i);
-    return el ? el.offsetHeight : 200;
-  });
-  document.body.removeChild(measurer);
+    // Construir secciones
+    const { headerHTML, summaryHTML, sections } = _buildReporteData({
+      obra: obra||{}, caja: caja||{}, presups: presups||[],
+      cobros: cobros||[], pagos: pagos||[], mats: mats||[],
+      logo: _logoGlobal||''
+    });
 
-  // Paginar: área útil por página ≈ 900px (A4 a 96dpi menos header y padding)
-  const PAGE_H = 900;
-  const pages = [[]];
-  let ph = 0;
-  for (let i = 0; i < allSecs.length; i++) {
-    const h = heights[i];
-    if (ph + h > PAGE_H && pages[pages.length-1].length > 0) {
-      pages.push([]); ph = 0;
+    // Medir alturas en div off-screen (position:absolute garantiza que el browser calcule layout)
+    const css = _getReporteCSS();
+    const allSecs = [summaryHTML, ...sections];
+    const measurer = document.createElement('div');
+    measurer.style.cssText = 'position:absolute;top:-99999px;left:0;width:673px;background:#fff';
+    measurer.innerHTML = '<style>' + css + '</style>'
+      + allSecs.map((s,i) => '<div id="__rpt' + i + '">' + s + '</div>').join('');
+    document.body.appendChild(measurer);
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => requestAnimationFrame(r));
+    const heights = allSecs.map((_,i) => {
+      const el = measurer.querySelector('#__rpt' + i);
+      return el ? el.offsetHeight : 200;
+    });
+    document.body.removeChild(measurer);
+
+    // Paginar: área útil ≈ 900px por página (A4 a 96dpi menos header y padding)
+    const PAGE_H = 900;
+    const pages = [[]];
+    let ph = 0;
+    for (let i = 0; i < allSecs.length; i++) {
+      const h = heights[i];
+      if (ph + h > PAGE_H && pages[pages.length-1].length > 0) {
+        pages.push([]); ph = 0;
+      }
+      pages[pages.length-1].push(allSecs[i]);
+      ph += h;
     }
-    pages[pages.length-1].push(allSecs[i]);
-    ph += h;
+
+    // Construir HTML con divs A4 explícitos — uno por página
+    const pagesHTML = pages.map(secs =>
+      '<div class="pdf-page">' + headerHTML + secs.join('') + '</div>'
+    ).join('');
+
+    const fullHTML = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>'
+      + '<title>Reporte de Obra</title>'
+      + '<style>' + css + '</style></head><body>'
+      + '<div class="nav">'
+      + '<button class="nb" onclick="window.close()">&#8592; Cerrar</button>'
+      + '<span class="nt">Reporte de Obra</span>'
+      + '<button class="nb nb2" onclick="window.print()">&#128438; Imprimir / PDF</button>'
+      + '</div>'
+      + '<div class="viewport">' + pagesHTML + '</div>'
+      + '</body></html>';
+
+    // Abrir popup y escribir con blob URL (evita problemas de document.open en Safari/iOS)
+    const blob = new Blob([fullHTML], { type: 'text/html;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(blob);
+    const w = window.open(blobUrl, '_blank');
+    if (!w) { toast('Permitir pop-ups para el reporte.', false); }
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+
+  } catch(err) {
+    console.error('Error generando reporte:', err);
+    toast('Error al generar el reporte: ' + (err.message || err), false);
   }
-
-  // Construir HTML con divs A4 explícitos — uno por página
-  const pagesHTML = pages.map(secs =>
-    '<div class="pdf-page">' + headerHTML + secs.join('') + '</div>'
-  ).join('');
-
-  const fullHTML = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>'
-    + '<title>Reporte de Obra</title>'
-    + '<style>' + css + '</style></head><body>'
-    + '<div class="nav">'
-    + '<button class="nb" onclick="window.close()">&#8592; Cerrar</button>'
-    + '<span class="nt">Reporte de Obra</span>'
-    + '<button class="nb nb2" onclick="window.print()">&#128438; Imprimir / PDF</button>'
-    + '</div>'
-    + '<div class="viewport">' + pagesHTML + '</div>'
-    + '</body></html>';
-
-  w.document.open();
-  w.document.write(fullHTML);
-  w.document.close();
 }
 
 function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
