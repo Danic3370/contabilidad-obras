@@ -1966,11 +1966,17 @@ function _escHtml(str) {
 }
 
 async function generarReporteObra(obraId) {
-  toast('Generando PDF...');
+  // Abrir popup sincrónicamente (antes del primer await) para evitar bloqueo en Safari/iOS
+  const w = window.open('', '_blank');
+  if (!w) { toast('Permitir pop-ups para el reporte.', false); return; }
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"/>'
+    + '<style>body{margin:0;font-family:Arial,sans-serif;background:#ccc;display:flex;align-items:center;justify-content:center;min-height:100vh}'
+    + 'p{background:#fff;padding:32px 48px;border-radius:12px;color:#F07800;font-size:16px;font-weight:600;box-shadow:0 2px 12px rgba(0,0,0,.2)}'
+    + '</style></head><body><p>Generando reporte...</p></body></html>');
+  w.document.close();
 
-  if (!_logoGlobal) {
-    buildReciboHTML({ fecha:'', cliente:'', monto:0, moneda:'ARS', concepto:'', efectivo:0, transferencia:0 });
-  }
+  toast('Preparando reporte...');
+  if (!_logoGlobal) buildReciboHTML({ fecha:'', cliente:'', monto:0, moneda:'ARS', concepto:'', efectivo:0, transferencia:0 });
 
   const [
     { data: obra }, { data: caja }, { data: presups },
@@ -1984,99 +1990,63 @@ async function generarReporteObra(obraId) {
     db.from('materiales').select('*').eq('obra_id', obraId).order('fecha', { ascending: true })
   ]);
 
-  const innerHTML = buildReporteHTML({
-    obra: obra || {}, caja: caja || {},
-    presups: presups || [], cobros: cobros || [],
-    pagos: pagos || [], mats: mats || [],
-    logo: _logoGlobal || ''
+  // Construir secciones
+  const { headerHTML, summaryHTML, sections } = _buildReporteData({
+    obra: obra||{}, caja: caja||{}, presups: presups||[],
+    cobros: cobros||[], pagos: pagos||[], mats: mats||[],
+    logo: _logoGlobal||''
   });
 
-  // html2canvas solo renderiza elementos visibles en el viewport.
-  // Solución: contenido en top:0 left:0, tapado por pantalla de carga opaca.
-  const loader = document.createElement('div');
-  loader.style.cssText = 'position:fixed;inset:0;background:#fff;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px';
-  loader.innerHTML = '<div style="width:40px;height:40px;border:3px solid #f0e0c0;border-top-color:#F07800;border-radius:50%;animation:spin 0.8s linear infinite"></div><div style="font-size:14px;color:#555;font-family:system-ui">Generando PDF...</div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
-  document.body.appendChild(loader);
+  // Medir alturas en un div off-screen con position:absolute (el browser calcula layout)
+  const css = _getReporteCSS();
+  const allSecs = [summaryHTML, ...sections];
+  const measurer = document.createElement('div');
+  measurer.style.cssText = 'position:absolute;top:-99999px;left:0;width:673px;background:#fff';
+  measurer.innerHTML = '<style>' + css + '</style>'
+    + allSecs.map((s,i) => '<div id="__rpt' + i + '">' + s + '</div>').join('');
+  document.body.appendChild(measurer);
+  // Esperar fuentes + 2 frames para que el layout esté calculado
+  if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  await new Promise(r => requestAnimationFrame(r));
+  await new Promise(r => requestAnimationFrame(r));
+  const heights = allSecs.map((_,i) => {
+    const el = measurer.querySelector('#__rpt' + i);
+    return el ? el.offsetHeight : 200;
+  });
+  document.body.removeChild(measurer);
 
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'position:fixed;top:0;left:0;width:670px;background:#fff;z-index:1';
-  wrap.innerHTML = innerHTML;
-  document.body.appendChild(wrap);
-
-  // Pequeña pausa para que el browser aplique los estilos antes de capturar
-  await new Promise(r => setTimeout(r, 80));
-
-  try {
-    const filename = 'Reporte-' + (obra?.cliente || 'Obra').replace(/[^a-zA-Z0-9 \-]/g, '') + '.pdf';
-
-    const pdf = await html2pdf()
-      .set({
-        margin: [32, 16, 15, 16],
-        filename,
-        image: { type: 'jpeg', quality: 0.95 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false, width: 670 },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak: { mode: ['css', 'avoid-all'] }
-      })
-      .from(wrap)
-      .toPdf()
-      .get('pdf');
-
-    // Dibujar el membrete en CADA página del PDF
-    const W = pdf.internal.pageSize.getWidth();   // 210mm
-    const n = pdf.internal.getNumberOfPages();
-    for (let i = 1; i <= n; i++) {
-      pdf.setPage(i);
-
-      // Fondo gris del membrete
-      pdf.setFillColor(232, 232, 232);
-      pdf.setDrawColor(153, 153, 153);
-      pdf.setLineWidth(0.3);
-      pdf.rect(16, 4, W - 32, 24, 'FD');
-
-      // Nombre del estudio
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(11);
-      pdf.setTextColor(0, 0, 0);
-      pdf.text('Arq. Daniel Cardigni - Matricula 30288', 20, 13);
-      pdf.setLineWidth(0.2);
-      pdf.line(20, 14, 20 + pdf.getTextWidth('Arq. Daniel Cardigni - Matricula 30288'), 14);
-
-      // Dirección
-      pdf.setFontSize(10);
-      pdf.text('Calle 11 n690  -  Tel. 11 28522111', 20, 21);
-      pdf.line(20, 22, 20 + pdf.getTextWidth('Calle 11 n690  -  Tel. 11 28522111'), 22);
-
-      // Logo
-      if (_logoGlobal) {
-        try { pdf.addImage(_logoGlobal, 'PNG', W - 37, 5, 19, 19); } catch(e) {}
-      }
+  // Paginar: área útil por página ≈ 900px (A4 a 96dpi menos header y padding)
+  const PAGE_H = 900;
+  const pages = [[]];
+  let ph = 0;
+  for (let i = 0; i < allSecs.length; i++) {
+    const h = heights[i];
+    if (ph + h > PAGE_H && pages[pages.length-1].length > 0) {
+      pages.push([]); ph = 0;
     }
-
-    const blob = pdf.output('blob');
-    const file = new File([blob], filename, { type: 'application/pdf' });
-
-    // Web Share API: funciona en PWA standalone iOS — abre el share sheet nativo
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: 'Reporte de Obra' });
-      toast('PDF listo.');
-    } else {
-      // Fallback desktop / Android: descarga directa
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = filename; a.style.display = 'none';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-      toast('PDF descargado.');
-    }
-
-  } catch(e) {
-    console.error('Error PDF:', e);
-    toast('Error al generar el PDF.', false);
-  } finally {
-    document.body.removeChild(wrap);
-    document.body.removeChild(loader);
+    pages[pages.length-1].push(allSecs[i]);
+    ph += h;
   }
+
+  // Construir HTML con divs A4 explícitos — uno por página
+  const pagesHTML = pages.map(secs =>
+    '<div class="pdf-page">' + headerHTML + secs.join('') + '</div>'
+  ).join('');
+
+  const fullHTML = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>'
+    + '<title>Reporte de Obra</title>'
+    + '<style>' + css + '</style></head><body>'
+    + '<div class="nav">'
+    + '<button class="nb" onclick="window.close()">&#8592; Cerrar</button>'
+    + '<span class="nt">Reporte de Obra</span>'
+    + '<button class="nb nb2" onclick="window.print()">&#128438; Imprimir / PDF</button>'
+    + '</div>'
+    + '<div class="viewport">' + pagesHTML + '</div>'
+    + '</body></html>';
+
+  w.document.open();
+  w.document.write(fullHTML);
+  w.document.close();
 }
 
 function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
@@ -2354,6 +2324,174 @@ html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:ex
     + moSections
     + '<div class="sec-block"><div class="sec-title">Materiales</div>' + matTable + '</div>'
     + '<div class="firma">Firma<br/><strong>Arq. Daniel Cardigni &mdash; Mat. 30288</strong></div>';
+}
+
+function _getReporteCSS() {
+  return `*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#ccc;font-family:Arial,Helvetica,sans-serif;font-size:10pt;color:#222}
+.nav{position:fixed;top:0;left:0;right:0;height:50px;background:#F07800;display:flex;align-items:center;justify-content:space-between;padding:0 16px;z-index:999}
+.nb{background:rgba(255,255,255,.22);border:none;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+.nb2{background:#fff;color:#F07800;font-weight:700}
+.nt{color:#fff;font-size:14px;font-weight:700}
+.viewport{margin-top:62px;display:flex;flex-direction:column;align-items:center;gap:20px;padding:20px 0 40px}
+.pdf-page{width:210mm;height:297mm;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.35);padding:5mm 16mm 15mm 16mm;overflow:hidden}
+.hbox{display:flex;justify-content:space-between;align-items:center;background:#e8e8e8;border:1px solid #999;padding:8px 12px;margin-bottom:10px}
+.htxt .l1{font-size:11pt;font-weight:bold;text-decoration:underline;display:block;line-height:1.8}
+.htxt .l2{font-size:10pt;font-weight:bold;text-decoration:underline;display:block;line-height:1.8}
+.hlogo{width:64px;height:64px;object-fit:contain}
+.rep-title{font-size:14pt;font-weight:bold;text-align:center;letter-spacing:.4px;margin-bottom:4px}
+.rep-sub{font-size:9.5pt;text-align:center;color:#555;margin-bottom:11px;padding-bottom:8px;border-bottom:2px solid #F5B800;line-height:1.7}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
+.card-item{border:1.5px solid #F5B800;border-radius:4px;padding:8px 10px;background:#FFFBF0}
+.card-lbl{font-size:7.5pt;color:#777;margin-bottom:2px;text-transform:uppercase;letter-spacing:.4px}
+.card-val{font-size:13pt;font-weight:bold;color:#F07800;line-height:1.2}
+.card-val.green{color:#2a7a3c}.card-val.red{color:#c0392b}
+.sec-title{font-size:11pt;font-weight:bold;background:#F07800;color:#fff;padding:4px 8px;margin:8px 0 5px}
+.tbl{width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:3px}
+.tbl th{background:#F07800;color:#fff;padding:5px 8px;text-align:left;font-size:9pt;font-weight:700}
+.tbl td{padding:4px 8px;border-bottom:.5px solid #eee;vertical-align:top;font-size:9pt}
+.tbl tbody tr:nth-child(even) td{background:#fafafa}
+.tbl .num{text-align:right;white-space:nowrap}
+.tbl .ok{color:#2a7a3c;font-weight:600}
+.tbl .warn{color:#b06a00;font-weight:600}
+.tftr td{background:#FFF3E0!important;border-top:2px solid #F07800;padding:5px 8px}
+.cont-hdr{background:#F5B800!important;color:#333!important;font-weight:700;font-size:10pt;padding:5px 8px}
+.pago-subhd{background:#FFF8E0!important;font-size:8pt;font-weight:700;color:#8a5a00;padding:4px 8px;text-transform:uppercase;border-bottom:1px solid #F5B800}
+.pago-row td{background:#FFFDF5!important;font-size:8.5pt}
+.cobro-row td{background:#FFF8E0!important;font-size:8.5pt}
+.usd{font-size:8pt;color:#999;font-style:italic}
+.dn{white-space:nowrap;width:80px}
+.enota{color:#aaa;font-size:9pt;margin:4px 0 8px;font-style:italic}
+.firma{margin-top:32px;border-top:1.5px solid #F07800;width:240px;padding-top:5px;font-size:9pt;color:#444}
+@media print{
+html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.nav{display:none!important}
+.viewport{margin:0;padding:0;gap:0}
+.pdf-page{padding:5mm 16mm 15mm 16mm;box-shadow:none;height:auto;overflow:visible;break-after:always;page-break-after:always}
+.pdf-page:last-child{break-after:avoid;page-break-after:avoid}
+@page{size:A4 portrait;margin:0}}`;
+}
+
+function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
+  const toARS = (m,mon,cot) => !m?0:mon==='ARS'?m:(mon==='USD'&&cot?m*cot:0);
+  const fm = n => '$ '+Math.round(n||0).toLocaleString('es-AR');
+  const fechaHoy = new Date().toLocaleDateString('es-AR',{day:'numeric',month:'long',year:'numeric'});
+
+  const totalPagadoMO = pagos.reduce((s,p)=>s+toARS(p.monto,p.moneda,p.cotizacion)+(p.beneficio_arquitecto||0),0);
+  const totalMateriales = mats.reduce((s,m)=>s+toARS(m.monto,m.moneda,m.cotizacion),0);
+  const cajaDisponible = caja.caja!=null?caja.caja:0;
+
+  // Cobros — particionado en chunks de MAX_ROWS para evitar páginas desbordadas
+  const MAX_ROWS=25;
+  const TL={'Honorarios':'Honorarios','Adelanto mano de obra':'Adelanto MO','Adelanto materiales':'Adelanto materiales'};
+  let totCobros=0;
+  const cobrosRowsArr=cobros.map(c=>{
+    const v=toARS(c.monto,c.moneda,c.cotizacion);totCobros+=v;
+    const usd=c.moneda==='USD'?' <span class="usd">(u$d '+(c.monto||0).toLocaleString('es-AR')+')</span>':'';
+    return '<tr class="cobro-row"><td class="dn">'+(c.fecha||'')+'</td><td>'+(TL[c.tipo]||c.tipo)+(c.notas?' &middot; <em>'+_escHtml(c.notas)+'</em>':'')+'</td><td class="num ok">'+fm(v)+usd+'</td></tr>';
+  });
+  const thCob='<thead><tr><th colspan="3" class="cont-hdr" style="background:#F07800!important;color:#fff!important">Detalle de cobros</th></tr>'
+    +'<tr><th class="dn">Fecha</th><th>Concepto</th><th class="num">Importe</th></tr></thead>';
+  const cobrosSecs=[];
+  if(cobros.length===0){
+    cobrosSecs.push('<div class="sec-title">Cobros al cliente</div><p class="enota">Sin cobros.</p>');
+  } else {
+    for(let ci=0;ci*MAX_ROWS<cobrosRowsArr.length;ci++){
+      const ch=cobrosRowsArr.slice(ci*MAX_ROWS,(ci+1)*MAX_ROWS);
+      const isLastC=(ci+1)*MAX_ROWS>=cobrosRowsArr.length;
+      cobrosSecs.push((ci===0?'<div class="sec-title">Cobros al cliente</div>':'')
+        +'<table class="tbl">'+thCob+'<tbody>'+ch.join('')+'</tbody>'
+        +(isLastC?'<tfoot><tr class="tftr"><td colspan="2"><strong>TOTAL COBRADO</strong></td>'
+          +'<td class="num ok"><strong>'+fm(totCobros)+'</strong></td></tr></tfoot>':'')
+        +'</table>');
+    }
+  }
+
+  // Honorarios
+  const pH=presups.filter(p=>p.tipo==='Honorarios');
+  const cBP={};
+  cobros.filter(c=>c.tipo==='Honorarios').forEach(c=>{const pid=c.presupuesto_id||'__';cBP[pid]=(cBP[pid]||0)+toARS(c.monto,c.moneda,c.cotizacion);});
+  let tPH=0,tCH=0;
+  const rHon=pH.map(p=>{const cob=cBP[p.id]||0,sd=p.monto-cob;tPH+=p.monto;tCH+=cob;
+    return '<tr><td>'+_escHtml(p.concepto)+'</td><td class="num">'+fm(p.monto)+(p.moneda==='USD'?' <span class="usd">USD</span>':'')+'</td><td class="num ok">'+fm(cob)+'</td><td class="num '+(sd>0?'warn':'ok')+'">'+fm(sd)+'</td></tr>';
+  }).join('');
+  const honS='<div class="sec-title">Honorarios</div>'+(pH.length===0?'<p class="enota">Sin presupuestos de honorarios.</p>'
+    :'<table class="tbl"><thead><tr><th>Concepto</th><th class="num">Presupuesto</th><th class="num">Cobrado</th><th class="num">Adeuda</th></tr></thead><tbody>'+rHon+'</tbody>'
+    +'<tfoot><tr class="tftr"><td><strong>TOTAL</strong></td><td class="num"><strong>'+fm(tPH)+'</strong></td><td class="num ok"><strong>'+fm(tCH)+'</strong></td><td class="num '+(tPH-tCH>0?'warn':'ok')+'"><strong>'+fm(tPH-tCH)+'</strong></td></tr></tfoot></table>');
+
+  // MO por contratista
+  const pMO=presups.filter(p=>p.tipo==='Mano de obra');
+  const cMap={};
+  pMO.forEach(p=>{const cid=p.contratista_id||'__n';if(!cMap[cid])cMap[cid]={nombre:p.contratistas?.nombre||'Sin asignar',presups:[]};cMap[cid].presups.push(p);});
+  pagos.forEach(p=>{const cid=p.contratista_id||'__n';if(!cMap[cid])cMap[cid]={nombre:p.contratistas?.nombre||'Sin identificar',presups:[]};});
+  const pBC={},pgBC={};
+  pagos.forEach(p=>{
+    const cid=p.contratista_id||'__n',v=toARS(p.monto,p.moneda,p.cotizacion)+(p.beneficio_arquitecto||0);
+    pBC[cid]=(pBC[cid]||0)+v;if(!pgBC[cid])pgBC[cid]=[];
+    pgBC[cid].push({fecha:p.fecha,notas:p.notas,_v:v});
+  });
+  const moSecs=[];let moFirst=true;
+  Object.entries(cMap).forEach(([cid,cont])=>{
+    const sP=cont.presups.reduce((s,p)=>s+p.monto,0),sPag=pBC[cid]||0,sd=sP-sPag;
+    const rP=cont.presups.map(p=>'<tr><td style="padding-left:12px">'+_escHtml(p.concepto)+(p.estado!=='Aprobado'?' <span class="usd">('+p.estado+')</span>':'')+'</td><td class="num">'+fm(p.monto)+(p.moneda==='USD'?' <span class="usd">USD</span>':'')+'</td><td></td><td></td></tr>').join('');
+    const pgs=pgBC[cid]||[];
+    const rPg=pgs.length===0?''
+      :'<tr><td colspan="4" class="pago-subhd">Pagos realizados</td></tr>'
+      +pgs.map(pg=>'<tr class="pago-row"><td style="padding-left:12px;font-size:8.5pt">'+(pg.fecha||'')+(pg.notas?' &middot; '+_escHtml(pg.notas):'')+'</td><td></td><td class="num ok">'+fm(pg._v)+'</td><td></td></tr>').join('');
+    const tR='<tr class="tftr"><td><strong>Total</strong></td><td class="num"><strong>'+(sP>0?fm(sP):'—')+'</strong></td><td class="num ok"><strong>'+fm(sPag)+'</strong></td><td class="num '+(sd>0?'warn':'ok')+'"><strong>'+fm(sd)+'</strong></td></tr>';
+    const tPfx=moFirst?'<div class="sec-title">Mano de Obra</div>':'';moFirst=false;
+    moSecs.push(tPfx+'<table class="tbl"><thead><tr><th colspan="4" class="cont-hdr">'+_escHtml(cont.nombre)+'</th></tr>'
+      +'<tr><th>Concepto</th><th class="num">Presupuesto</th><th class="num">Pagado</th><th class="num">Adeuda</th></tr></thead>'
+      +'<tbody>'+rP+rPg+'</tbody><tfoot>'+tR+'</tfoot></table>');
+  });
+  if(moSecs.length===0)moSecs.push('<div class="sec-title">Mano de Obra</div><p class="enota">Sin movimientos registrados.</p>');
+
+  // Materiales — particionado en chunks de MAX_ROWS para evitar páginas desbordadas
+  let totMat=0;
+  const matRowsArr=mats.map(m=>{
+    const v=toARS(m.monto,m.moneda,m.cotizacion);totMat+=v;
+    const usd=m.moneda==='USD'?' <span class="usd">(u$d '+(m.monto||0).toLocaleString('es-AR')+')</span>':'';
+    return '<tr><td class="dn">'+(m.fecha||'')+'</td><td>'+_escHtml(m.descripcion)+usd+'</td><td class="num">'+fm(v)+'</td></tr>';
+  });
+  const thMat='<thead><tr><th class="dn">Fecha</th><th>Descripción</th><th class="num">Importe</th></tr></thead>';
+  const matSecs=[];
+  if(mats.length===0){
+    matSecs.push('<div class="sec-title">Materiales</div><p class="enota">Sin compras registradas.</p>');
+  } else {
+    for(let mi=0;mi*MAX_ROWS<matRowsArr.length;mi++){
+      const mh=matRowsArr.slice(mi*MAX_ROWS,(mi+1)*MAX_ROWS);
+      const isLastM=(mi+1)*MAX_ROWS>=matRowsArr.length;
+      matSecs.push((mi===0?'<div class="sec-title">Materiales</div>':'')
+        +'<table class="tbl">'+thMat+'<tbody>'+mh.join('')+'</tbody>'
+        +(isLastM?'<tfoot><tr class="tftr"><td colspan="2"><strong>TOTAL MATERIALES</strong></td>'
+          +'<td class="num"><strong>'+fm(totMat)+'</strong></td></tr></tfoot>':'')
+        +'</table>');
+    }
+  }
+
+  // Membrete
+  const logoTag=logo?'<img class="hlogo" src="'+logo+'" alt=""/>':'';
+  const headerHTML='<div class="hbox"><div class="htxt"><span class="l1">Arq. Daniel Cardigni &mdash; Matr&iacute;cula 30288</span><span class="l2">Calle 11 n690 &nbsp;&mdash;&nbsp; Tel. 11 28522111</span></div>'+logoTag+'</div>';
+
+  // Resumen (siempre al inicio de pág 1)
+  const summaryHTML='<div class="rep-title">REPORTE DE OBRA</div>'
+    +'<div class="rep-sub"><strong>'+_escHtml(obra.cliente||'')+'</strong>'
+    +(obra.nombre?' &nbsp;&middot;&nbsp; '+_escHtml(obra.nombre):'')
+    +(obra.direccion?'<br/>'+_escHtml(obra.direccion):'')
+    +'<br/>Emitido: '+fechaHoy+'</div>'
+    +'<div class="cards">'
+    +'<div class="card-item"><div class="card-lbl">Total cobrado al cliente</div><div class="card-val ok">'+fm(totCobros)+'</div></div>'
+    +'<div class="card-item"><div class="card-lbl">Dinero en caja disponible</div><div class="card-val '+(cajaDisponible>=0?'green':'red')+'">'+fm(cajaDisponible)+'</div></div>'
+    +'<div class="card-item"><div class="card-lbl">Total pagado mano de obra</div><div class="card-val">'+fm(totalPagadoMO)+'</div></div>'
+    +'<div class="card-item"><div class="card-lbl">Total pagado materiales</div><div class="card-val">'+fm(totalMateriales)+'</div></div>'
+    +'</div>';
+
+  return {
+    headerHTML,
+    summaryHTML,
+    sections: [...cobrosSecs, honS, ...moSecs, ...matSecs,
+      '<div class="firma">Firma<br/><strong>Arq. Daniel Cardigni &mdash; Mat. 30288</strong></div>']
+  };
 }
 
 // ---- SWIPE BACK (gesto iOS) ----
