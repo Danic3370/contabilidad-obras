@@ -2132,7 +2132,7 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
 
     const _moTitle = _moFirst ? '<div class="sec-title">Mano de Obra</div>' : '';
     _moFirst = false;
-    moSections += '<div class="sec-block">'
+    moSections += '<tr class="dtr"><td class="dtd">'
       + _moTitle
       + '<table class="tbl" style="margin-bottom:8px">'
       + '<thead>'
@@ -2146,11 +2146,11 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
       + '<td class="num ok"><strong>' + fm(sumPagado) + '</strong></td>'
       + '<td class="num ' + (saldo > 0 ? 'warn' : 'ok') + '"><strong>' + fm(saldo) + '</strong></td>'
       + '</tr></tfoot></table>'
-      + '</div>';
+      + '</td></tr>';
   });
 
   if (moSections === '') {
-    moSections = '<div class="sec-block"><div class="sec-title">Mano de Obra</div><p class="empty-note">Sin movimientos de mano de obra registrados.</p></div>';
+    moSections = '<tr class="dtr"><td class="dtd"><div class="sec-title">Mano de Obra</div><p class="empty-note">Sin movimientos de mano de obra registrados.</p></td></tr>';
   }
 
   // ---- Tabla Materiales ----
@@ -2217,12 +2217,22 @@ html,body{background:#d8d8d8;font-family:Arial,Helvetica,sans-serif;color:#222;f
 .tag-estado{font-size:8pt;color:#bbb}
 .empty-note{color:#aaa;font-size:9pt;margin:4px 0 8px;font-style:italic}
 .firma{margin-top:32px;border-top:1.5px solid #F07800;width:240px;padding-top:5px;font-size:9pt;color:#444}
+/* dtbl: tabla-documento para encabezado repetido. En pantalla = bloque normal */
+.dtbl{display:block;width:100%}
+.dtbl thead,.dtbl tbody,.dtbl tr{display:block}
+.dtd{display:block;padding:0;width:100%;border:0}
 @media print{
 @page{size:A4 portrait;margin:15mm 16mm 15mm 16mm}
 html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .nav{display:none!important}
 .wrap{margin:0;padding:0;display:block}
 .page{width:100%;min-height:auto;padding:0;box-shadow:none}
+/* En print: dtbl activa thead-repeat al tener múltiples tr que cruzan páginas */
+.dtbl{display:table;border-collapse:collapse}
+.dtbl thead{display:table-header-group}
+.dtbl tbody{display:table-row-group}
+.dtr{display:table-row;break-inside:avoid;page-break-inside:avoid}
+.dtd{display:table-cell;vertical-align:top}
 }`;
 
   // ---- Tabla Cobros ----
@@ -2261,6 +2271,9 @@ html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:ex
     + '<button class="nb nb2" onclick="window.print()">Guardar PDF</button>'
     + '</div>'
     + '<div class="wrap"><div class="page">'
+    + '<table class="dtbl">'
+    /* ENCABEZADO — se repite en cada página via display:table-header-group */
+    + '<thead><tr><td class="dtd">'
     + '<div class="hbox">'
     + '<div class="htxt">'
     + '<span class="l1">Arq. Daniel Cardigni &mdash; Matr&iacute;cula 30288</span>'
@@ -2268,6 +2281,10 @@ html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:ex
     + '</div>'
     + logoTag
     + '</div>'
+    + '</td></tr></thead>'
+    /* CUERPO — una fila por sección, cada una con break-inside:avoid */
+    + '<tbody>'
+    + '<tr class="dtr"><td class="dtd">'
     + '<div class="rep-title">REPORTE DE OBRA</div>'
     + '<div class="rep-sub">'
     + '<strong>' + _escHtml(obra.cliente) + '</strong>'
@@ -2281,11 +2298,13 @@ html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:ex
     + '<div class="card-item"><div class="card-lbl">Total pagado mano de obra</div><div class="card-val">' + fm(totalPagadoMO) + '</div></div>'
     + '<div class="card-item"><div class="card-lbl">Total pagado materiales</div><div class="card-val">' + fm(totalMateriales) + '</div></div>'
     + '</div>'
-    + '<div class="sec-block"><div class="sec-title">Cobros al cliente</div>' + cobrosTable + '</div>'
-    + '<div class="sec-block"><div class="sec-title">Honorarios</div>' + honTable + '</div>'
+    + '</td></tr>'
+    + '<tr class="dtr"><td class="dtd"><div class="sec-title">Cobros al cliente</div>' + cobrosTable + '</td></tr>'
+    + '<tr class="dtr"><td class="dtd"><div class="sec-title">Honorarios</div>' + honTable + '</td></tr>'
     + moSections
-    + '<div class="sec-block"><div class="sec-title">Materiales</div>' + matTable + '</div>'
-    + '<div class="firma">Firma<br/><strong>Arq. Daniel Cardigni &mdash; Mat. 30288</strong></div>'
+    + '<tr class="dtr"><td class="dtd"><div class="sec-title">Materiales</div>' + matTable + '</td></tr>'
+    + '<tr class="dtr"><td class="dtd"><div class="firma">Firma<br/><strong>Arq. Daniel Cardigni &mdash; Mat. 30288</strong></div></td></tr>'
+    + '</tbody></table>'
     + '</div></div>'
     + '</body></html>';
 }
