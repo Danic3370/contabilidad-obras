@@ -2132,7 +2132,7 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
 
     const _moTitle = _moFirst ? '<div class="sec-title">Mano de Obra</div>' : '';
     _moFirst = false;
-    moSections += '<tr class="dtr"><td class="dtd">'
+    moSections += '<div class="sec-block">'
       + _moTitle
       + '<table class="tbl" style="margin-bottom:8px">'
       + '<thead>'
@@ -2146,11 +2146,11 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
       + '<td class="num ok"><strong>' + fm(sumPagado) + '</strong></td>'
       + '<td class="num ' + (saldo > 0 ? 'warn' : 'ok') + '"><strong>' + fm(saldo) + '</strong></td>'
       + '</tr></tfoot></table>'
-      + '</td></tr>';
+      + '</div>';
   });
 
   if (moSections === '') {
-    moSections = '<tr class="dtr"><td class="dtd"><div class="sec-title">Mano de Obra</div><p class="empty-note">Sin movimientos de mano de obra registrados.</p></td></tr>';
+    moSections = '<div class="sec-block"><div class="sec-title">Mano de Obra</div><p class="empty-note">Sin movimientos de mano de obra registrados.</p></div>';
   }
 
   // ---- Tabla Materiales ----
@@ -2271,9 +2271,6 @@ html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:ex
     + '<button class="nb nb2" onclick="window.print()">Guardar PDF</button>'
     + '</div>'
     + '<div class="wrap"><div class="page">'
-    + '<table class="dtbl">'
-    /* ENCABEZADO — se repite en cada página via display:table-header-group */
-    + '<thead><tr><td class="dtd">'
     + '<div class="hbox">'
     + '<div class="htxt">'
     + '<span class="l1">Arq. Daniel Cardigni &mdash; Matr&iacute;cula 30288</span>'
@@ -2281,10 +2278,6 @@ html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:ex
     + '</div>'
     + logoTag
     + '</div>'
-    + '</td></tr></thead>'
-    /* CUERPO — una fila por sección, cada una con break-inside:avoid */
-    + '<tbody>'
-    + '<tr class="dtr"><td class="dtd">'
     + '<div class="rep-title">REPORTE DE OBRA</div>'
     + '<div class="rep-sub">'
     + '<strong>' + _escHtml(obra.cliente) + '</strong>'
@@ -2298,13 +2291,11 @@ html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:ex
     + '<div class="card-item"><div class="card-lbl">Total pagado mano de obra</div><div class="card-val">' + fm(totalPagadoMO) + '</div></div>'
     + '<div class="card-item"><div class="card-lbl">Total pagado materiales</div><div class="card-val">' + fm(totalMateriales) + '</div></div>'
     + '</div>'
-    + '</td></tr>'
-    + '<tr class="dtr"><td class="dtd"><div class="sec-title">Cobros al cliente</div>' + cobrosTable + '</td></tr>'
-    + '<tr class="dtr"><td class="dtd"><div class="sec-title">Honorarios</div>' + honTable + '</td></tr>'
+    + '<div class="sec-block"><div class="sec-title">Cobros al cliente</div>' + cobrosTable + '</div>'
+    + '<div class="sec-block"><div class="sec-title">Honorarios</div>' + honTable + '</div>'
     + moSections
-    + '<tr class="dtr"><td class="dtd"><div class="sec-title">Materiales</div>' + matTable + '</td></tr>'
-    + '<tr class="dtr"><td class="dtd"><div class="firma">Firma<br/><strong>Arq. Daniel Cardigni &mdash; Mat. 30288</strong></div></td></tr>'
-    + '</tbody></table>'
+    + '<div class="sec-block"><div class="sec-title">Materiales</div>' + matTable + '</div>'
+    + '<div class="firma">Firma<br/><strong>Arq. Daniel Cardigni &mdash; Mat. 30288</strong></div>'
     + '</div></div>'
     + '</body></html>';
 }
