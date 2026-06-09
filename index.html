@@ -2343,21 +2343,25 @@ html,body{background:#ccc;font-family:Arial,Helvetica,sans-serif;font-size:10pt;
 .cards{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
 .card-item{border:1.5px solid #F5B800;border-radius:4px;padding:8px 10px;background:#FFFBF0}
 .card-lbl{font-size:7.5pt;color:#777;margin-bottom:2px;text-transform:uppercase;letter-spacing:.4px}
-.card-val{font-size:13pt;font-weight:bold;color:#F07800;line-height:1.2}
-.card-val.green{color:#2a7a3c}.card-val.red{color:#c0392b}
-.sec-title{font-size:11pt;font-weight:bold;background:#F07800;color:#fff;padding:4px 8px;margin:8px 0 5px}
-.tbl{width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:3px}
-.tbl th{background:#F07800;color:#fff;padding:5px 8px;text-align:left;font-size:9pt;font-weight:700}
-.tbl td{padding:4px 8px;border-bottom:.5px solid #eee;vertical-align:top;font-size:9pt}
-.tbl tbody tr:nth-child(even) td{background:#fafafa}
+.card-val{font-size:13pt;font-weight:bold;color:#000;line-height:1.2}
+.card-val.green{color:#000}.card-val.red{color:#000}
+.sec-box{border:2px solid #F07800;margin-top:0}
+.cont-box{border:2px solid #F07800;margin-top:8px}
+.sec-title+.cont-box{margin-top:4px}
+.cont-box .tbl .num{text-align:center}
+.sec-title{font-size:11pt;font-weight:bold;background:#F07800;color:#000;padding:4px 8px;margin:0;text-transform:uppercase}
+.tbl{width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:0}
+.tbl th{background:#F4DCA0;color:#000;padding:5px 8px;text-align:left;font-size:9pt;font-weight:700}
+.tbl td{padding:4px 8px;border-bottom:1px solid #e0e0e0;vertical-align:top;font-size:9pt;color:#000;background:#fff}
+.tbl tbody tr:nth-child(even) td{background:#fff}
 .tbl .num{text-align:right;white-space:nowrap}
-.tbl .ok{color:#2a7a3c;font-weight:600}
-.tbl .warn{color:#b06a00;font-weight:600}
-.tftr td{background:#FFF3E0!important;border-top:2px solid #F07800;padding:5px 8px}
-.cont-hdr{background:#F5B800!important;color:#333!important;font-weight:700;font-size:10pt;padding:5px 8px}
-.pago-subhd{background:#FFF8E0!important;font-size:8pt;font-weight:700;color:#8a5a00;padding:4px 8px;text-transform:uppercase;border-bottom:1px solid #F5B800}
-.pago-row td{background:#FFFDF5!important;font-size:8.5pt}
-.cobro-row td{background:#FFF8E0!important;font-size:8.5pt}
+.tbl .ok{color:#000;font-weight:600}
+.tbl .warn{color:#000;font-weight:600}
+.tftr td{background:#FFF3E0!important;border-top:2px solid #F07800;padding:5px 8px;color:#000;font-size:9pt!important;font-weight:bold}
+.cont-hdr{background:#F4DCA0!important;color:#000!important;font-weight:700;font-size:9pt;padding:5px 8px}
+.pago-subhd{background:#F4DCA0!important;font-size:9pt;font-weight:700;color:#000!important;padding:4px 8px;text-transform:uppercase;border-bottom:none}
+.pago-row td{background:#fff!important;font-size:8.5pt;color:#000}
+.cobro-row td{background:#fff!important;font-size:8.5pt;color:#000}
 .usd{font-size:8pt;color:#999;font-style:italic}
 .dn{white-space:nowrap;width:80px}
 .enota{color:#aaa;font-size:9pt;margin:4px 0 8px;font-style:italic}
@@ -2393,13 +2397,12 @@ function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
     +'<tr><th class="dn">Fecha</th><th>Concepto</th><th class="num">Importe</th></tr></thead>';
   const cobrosSecs=[];
   if(cobros.length===0){
-    cobrosSecs.push('<div class="sec-title">Cobros al cliente</div><p class="enota">Sin cobros.</p>');
+    cobrosSecs.push('<p class="enota">Sin cobros.</p>');
   } else {
     for(let ci=0;ci*MAX_ROWS<cobrosRowsArr.length;ci++){
       const ch=cobrosRowsArr.slice(ci*MAX_ROWS,(ci+1)*MAX_ROWS);
       const isLastC=(ci+1)*MAX_ROWS>=cobrosRowsArr.length;
-      cobrosSecs.push((ci===0?'<div class="sec-title">Cobros al cliente</div>':'')
-        +'<table class="tbl">'+thCob+'<tbody>'+ch.join('')+'</tbody>'
+      cobrosSecs.push('<table class="tbl">'+thCob+'<tbody>'+ch.join('')+'</tbody>'
         +(isLastC?'<tfoot><tr class="tftr"><td colspan="2"><strong>TOTAL COBRADO</strong></td>'
           +'<td class="num ok"><strong>'+fm(totCobros)+'</strong></td></tr></tfoot>':'')
         +'</table>');
@@ -2414,9 +2417,9 @@ function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
   const rHon=pH.map(p=>{const cob=cBP[p.id]||0,sd=p.monto-cob;tPH+=p.monto;tCH+=cob;
     return '<tr><td>'+_escHtml(p.concepto)+'</td><td class="num">'+fm(p.monto)+(p.moneda==='USD'?' <span class="usd">USD</span>':'')+'</td><td class="num ok">'+fm(cob)+'</td><td class="num '+(sd>0?'warn':'ok')+'">'+fm(sd)+'</td></tr>';
   }).join('');
-  const honS='<div class="sec-title">Honorarios</div>'+(pH.length===0?'<p class="enota">Sin presupuestos de honorarios.</p>'
+  const honContent=pH.length===0?'<p class="enota">Sin presupuestos de honorarios.</p>'
     :'<table class="tbl"><thead><tr><th>Concepto</th><th class="num">Presupuesto</th><th class="num">Cobrado</th><th class="num">Adeuda</th></tr></thead><tbody>'+rHon+'</tbody>'
-    +'<tfoot><tr class="tftr"><td><strong>TOTAL</strong></td><td class="num"><strong>'+fm(tPH)+'</strong></td><td class="num ok"><strong>'+fm(tCH)+'</strong></td><td class="num '+(tPH-tCH>0?'warn':'ok')+'"><strong>'+fm(tPH-tCH)+'</strong></td></tr></tfoot></table>');
+    +'<tfoot><tr class="tftr"><td><strong>TOTAL</strong></td><td class="num"><strong>'+fm(tPH)+'</strong></td><td class="num ok"><strong>'+fm(tCH)+'</strong></td><td class="num '+(tPH-tCH>0?'warn':'ok')+'"><strong>'+fm(tPH-tCH)+'</strong></td></tr></tfoot></table>';
 
   // MO por contratista
   const pMO=presups.filter(p=>p.tipo==='Mano de obra');
@@ -2437,13 +2440,14 @@ function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
     const rPg=pgs.length===0?''
       :'<tr><td colspan="4" class="pago-subhd">Pagos realizados</td></tr>'
       +pgs.map(pg=>'<tr class="pago-row"><td style="padding-left:12px;font-size:8.5pt">'+(pg.fecha||'')+(pg.notas?' &middot; '+_escHtml(pg.notas):'')+'</td><td></td><td class="num ok">'+fm(pg._v)+'</td><td></td></tr>').join('');
-    const tR='<tr class="tftr"><td><strong>Total</strong></td><td class="num"><strong>'+(sP>0?fm(sP):'—')+'</strong></td><td class="num ok"><strong>'+fm(sPag)+'</strong></td><td class="num '+(sd>0?'warn':'ok')+'"><strong>'+fm(sd)+'</strong></td></tr>';
-    const tPfx=moFirst?'<div class="sec-title">Mano de Obra</div>':'';moFirst=false;
-    moSecs.push(tPfx+'<table class="tbl"><thead><tr><th colspan="4" class="cont-hdr">'+_escHtml(cont.nombre)+'</th></tr>'
+    const tR='<tr class="tftr"><td><strong>TOTAL</strong></td><td class="num"><strong>'+(sP>0?fm(sP):'—')+'</strong></td><td class="num ok"><strong>'+fm(sPag)+'</strong></td><td class="num '+(sd>0?'warn':'ok')+'"><strong>'+fm(sd)+'</strong></td></tr>';
+    if(moFirst){moSecs.push('<div class="sec-title">Mano de Obra</div>');moFirst=false;}
+    const colsMO='<colgroup><col><col style="width:90px"><col style="width:90px"><col style="width:90px"></colgroup>';
+    moSecs.push('<div class="cont-box"><table class="tbl" style="table-layout:fixed">'+colsMO+'<thead><tr><th colspan="4" class="cont-hdr">'+_escHtml(cont.nombre)+'</th></tr>'
       +'<tr><th>Concepto</th><th class="num">Presupuesto</th><th class="num">Pagado</th><th class="num">Adeuda</th></tr></thead>'
-      +'<tbody>'+rP+rPg+'</tbody><tfoot>'+tR+'</tfoot></table>');
+      +'<tbody>'+rP+rPg+'</tbody><tfoot>'+tR+'</tfoot></table></div>');
   });
-  if(moSecs.length===0)moSecs.push('<div class="sec-title">Mano de Obra</div><p class="enota">Sin movimientos registrados.</p>');
+  if(moSecs.length===0)moSecs.push('<p class="enota">Sin movimientos registrados.</p>');
 
   // Materiales — particionado en chunks de MAX_ROWS para evitar páginas desbordadas
   let totMat=0;
@@ -2455,13 +2459,12 @@ function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
   const thMat='<thead><tr><th class="dn">Fecha</th><th>Descripción</th><th class="num">Importe</th></tr></thead>';
   const matSecs=[];
   if(mats.length===0){
-    matSecs.push('<div class="sec-title">Materiales</div><p class="enota">Sin compras registradas.</p>');
+    matSecs.push('<p class="enota">Sin compras registradas.</p>');
   } else {
     for(let mi=0;mi*MAX_ROWS<matRowsArr.length;mi++){
       const mh=matRowsArr.slice(mi*MAX_ROWS,(mi+1)*MAX_ROWS);
       const isLastM=(mi+1)*MAX_ROWS>=matRowsArr.length;
-      matSecs.push((mi===0?'<div class="sec-title">Materiales</div>':'')
-        +'<table class="tbl">'+thMat+'<tbody>'+mh.join('')+'</tbody>'
+      matSecs.push('<table class="tbl">'+thMat+'<tbody>'+mh.join('')+'</tbody>'
         +(isLastM?'<tfoot><tr class="tftr"><td colspan="2"><strong>TOTAL MATERIALES</strong></td>'
           +'<td class="num"><strong>'+fm(totMat)+'</strong></td></tr></tfoot>':'')
         +'</table>');
@@ -2488,8 +2491,13 @@ function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
   return {
     headerHTML,
     summaryHTML,
-    sections: [...cobrosSecs, honS, ...moSecs, ...matSecs,
-      '<div class="firma">Firma<br/><strong>Arq. Daniel Cardigni &mdash; Mat. 30288</strong></div>']
+    sections: [
+      '<div style="margin-top:12px"><div class="sec-title">Cobros al cliente</div><div style="height:4px"></div><div class="sec-box">'+cobrosSecs.join('')+'</div></div>',
+      '<div style="margin-top:12px"><div class="sec-title">Honorarios</div><div style="height:4px"></div><div class="sec-box">'+honContent+'</div></div>',
+      '<div style="margin-top:12px">'+moSecs.join('')+'</div>',
+      '<div style="margin-top:12px"><div class="sec-title">Materiales</div><div style="height:4px"></div><div class="sec-box">'+matSecs.join('')+'</div></div>',
+      '<div class="firma">Firma<br/><strong>Arq. Daniel Cardigni &mdash; Mat. 30288</strong></div>'
+    ]
   };
 }
 
