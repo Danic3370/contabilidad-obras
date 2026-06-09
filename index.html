@@ -2091,6 +2091,7 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
   });
 
   let moSections = '';
+  let _moFirst = true;
   const processedConts = new Set();
 
   Object.entries(contMap).forEach(([cid, cont]) => {
@@ -2129,7 +2130,11 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
       ? '<tr><td colspan="4" class="pago-subhead">Pagos realizados</td></tr>' + pagoRows
       : '<tr><td colspan="4" class="pago-subhead" style="color:#aaa;font-style:italic">Sin pagos registrados</td></tr>';
 
-    moSections += '<div class="rsec"><table class="tbl" style="margin-bottom:10px">'
+    const _moTitle = _moFirst ? '<div class="sec-title">Mano de Obra</div>' : '';
+    _moFirst = false;
+    moSections += '<tr class="doc-row"><td>'
+      + _moTitle
+      + '<table class="tbl" style="margin-bottom:8px">'
       + '<thead>'
       + '<tr><th colspan="4" class="cont-header">' + _escHtml(cont.nombre) + '</th></tr>'
       + '<tr><th>Concepto</th><th class="num">Presupuesto</th><th class="num">Pagado</th><th class="num">Adeuda</th></tr>'
@@ -2140,11 +2145,12 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
       + '<td class="num"><strong>' + presupCol + '</strong></td>'
       + '<td class="num ok"><strong>' + fm(sumPagado) + '</strong></td>'
       + '<td class="num ' + (saldo > 0 ? 'warn' : 'ok') + '"><strong>' + fm(saldo) + '</strong></td>'
-      + '</tr></tfoot></table></div>';
+      + '</tr></tfoot></table>'
+      + '</td></tr>';
   });
 
   if (moSections === '') {
-    moSections = '<p class="empty-note">Sin movimientos de mano de obra registrados.</p>';
+    moSections = '<tr class="doc-row"><td><div class="sec-title">Mano de Obra</div><p class="empty-note">Sin movimientos de mano de obra registrados.</p></td></tr>';
   }
 
   // ---- Tabla Materiales ----
@@ -2171,6 +2177,8 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
         + '</tr></tfoot></table>';
 
   // ---- CSS — paleta logo: naranja #F07800 / amarillo #F5B800 ----
+  // doc-table: en PANTALLA se comporta como bloque normal (display:block).
+  // En PRINT activa el thead-repeat real porque tiene múltiples <tr> que cruzan páginas.
   const css = [
     '*{box-sizing:border-box;margin:0;padding:0}',
     'html,body{background:#d8d8d8;font-family:Arial,Helvetica,sans-serif;color:#222;font-size:10pt}',
@@ -2182,9 +2190,9 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
     /* wrap / hoja — pantalla */
     '.wrap{margin-top:62px;display:flex;justify-content:center;padding:16px 0 40px}',
     '.page{background:#fff;width:210mm;min-height:297mm;padding:14mm 17mm 17mm 17mm;box-shadow:0 2px 18px rgba(0,0,0,.28)}',
-    /* tabla-documento: en pantalla es bloque, en print activa el thead-repeat */
-    '.doc-table{width:100%;border-collapse:collapse;border-spacing:0}',
-    '.doc-table>thead>tr>td,.doc-table>tbody>tr>td{padding:0;border:none;vertical-align:top}',
+    /* doc-table: en pantalla se comporta como bloque */
+    '.doc-table,.doc-table thead,.doc-table tbody,.doc-table tr{display:block}',
+    '.doc-head-cell,.doc-row td{display:block;padding:0;border:0;vertical-align:top}',
     /* encabezado de hoja */
     '.hbox{display:flex;justify-content:space-between;align-items:center;background:#e8e8e8;border:1px solid #999;padding:8px 12px;margin-bottom:10px}',
     '.htxt .l1{font-size:11pt;font-weight:bold;text-decoration:underline;display:block;line-height:1.8}',
@@ -2225,20 +2233,21 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
     '.empty-note{color:#aaa;font-size:9pt;margin:4px 0 8px;font-style:italic}',
     '.firma{margin-top:32px;border-top:1.5px solid #F07800;width:240px;padding-top:5px;font-size:9pt;color:#444}',
     /* ---- PRINT ---- */
-    /* iOS Safari: @page fija los márgenes reales de la hoja */
     '@media print{',
-    '@page{size:A4 portrait;margin:14mm 16mm 16mm 16mm}',
+    /* @page define los márgenes reales — iOS Safari los respeta */
+    '@page{size:A4 portrait;margin:15mm 16mm 15mm 16mm}',
     'html,body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}',
     '.nav{display:none!important}',
     '.wrap{margin:0;padding:0;display:block}',
-    /* la hoja no tiene padding propio: los márgenes vienen del @page */
     '.page{width:100%;min-height:auto;padding:0;box-shadow:none;background:#fff}',
-    /* la tabla-documento activa el encabezado repetido en cada página */
-    '.doc-table{width:100%;display:table}',
-    '.doc-table thead{display:table-header-group}',
-    '.doc-table tbody{display:table-row-group}',
-    /* sin margin-top extra, el @page margin ya dejó el espacio */
-    '.page-body{margin-top:0}',
+    /* En print, doc-table vuelve a ser tabla real para que thead-repeat funcione */
+    '.doc-table{display:table!important;width:100%;border-collapse:collapse;border-spacing:0}',
+    '.doc-table thead{display:table-header-group!important}',
+    '.doc-table tbody{display:table-row-group!important}',
+    '.doc-row{display:table-row!important;break-inside:avoid;page-break-inside:avoid}',
+    '.doc-head-cell,.doc-row td{display:table-cell!important;padding:0;border:0;vertical-align:top;width:100%}',
+    '.doc-head-cell{padding-bottom:0}',
+    '.hbox{margin-bottom:8px}',
     '}'
   ].join('');
 
@@ -2284,9 +2293,10 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
       en cada página impresa (estándar CSS, funciona en iOS Safari).
       Sin position:fixed => sin solapamientos ni cortes.
     */
+    /* doc-table: múltiples <tr> reales → thead se repite en cada página impresa */
     + '<table class="doc-table" cellspacing="0" cellpadding="0">'
-    /* ENCABEZADO REPETIDO EN CADA PÁGINA */
-    + '<thead><tr><td>'
+    + '<thead>'
+    + '<tr><td class="doc-head-cell">'
     + '<div class="hbox">'
     + '<div class="htxt">'
     + '<span class="l1">Arq. Daniel Cardigni &mdash; Matr&iacute;cula 30288</span>'
@@ -2294,10 +2304,11 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
     + '</div>'
     + logoTag
     + '</div>'
-    + '</td></tr></thead>'
-    /* CUERPO DEL DOCUMENTO */
-    + '<tbody><tr><td>'
-    + '<div class="page-body">'
+    + '</td></tr>'
+    + '</thead>'
+    + '<tbody>'
+    /* Fila 1: título + datos obra + tarjetas */
+    + '<tr class="doc-row"><td>'
     + '<div class="rep-title">REPORTE DE OBRA</div>'
     + '<div class="rep-sub">'
     + '<strong>' + _escHtml(obra.cliente) + '</strong>'
@@ -2305,20 +2316,24 @@ function buildReporteHTML({ obra, caja, presups, cobros, pagos, mats, logo }) {
     + (obra.direccion ? '<br/>' + _escHtml(obra.direccion) : '')
     + '<br/>Emitido: ' + fechaHoy
     + '</div>'
-    + '<div class="cards rsec">'
+    + '<div class="cards">'
     + '<div class="card-item"><div class="card-lbl">Total cobrado al cliente</div><div class="card-val ok">' + fm(totCobrosTotal) + '</div></div>'
     + '<div class="card-item"><div class="card-lbl">Dinero en caja disponible</div><div class="card-val ' + (cajaDisponible >= 0 ? 'green' : 'red') + '">' + fm(cajaDisponible) + '</div></div>'
     + '<div class="card-item"><div class="card-lbl">Total pagado mano de obra</div><div class="card-val">' + fm(totalPagadoMO) + '</div></div>'
     + '<div class="card-item"><div class="card-lbl">Total pagado materiales</div><div class="card-val">' + fm(totalMateriales) + '</div></div>'
     + '</div>'
-    + '<div class="rsec"><div class="sec-title">Cobros al cliente</div>' + cobrosTable + '</div>'
-    + '<div class="rsec"><div class="sec-title">Honorarios</div>' + honTable + '</div>'
-    + '<div class="sec-title">Mano de Obra</div>'
+    + '</td></tr>'
+    /* Fila 2: cobros */
+    + '<tr class="doc-row"><td><div class="sec-title">Cobros al cliente</div>' + cobrosTable + '</td></tr>'
+    /* Fila 3: honorarios */
+    + '<tr class="doc-row"><td><div class="sec-title">Honorarios</div>' + honTable + '</td></tr>'
+    /* Filas 4…N: una por contratista (título "Mano de Obra" integrado en la primera) */
     + moSections
-    + '<div class="rsec"><div class="sec-title">Materiales</div>' + matTable + '</div>'
-    + '<div class="firma">Firma<br/><strong>Arq. Daniel Cardigni &mdash; Mat. 30288</strong></div>'
-    + '</div>'   /* /page-body */
-    + '</td></tr></tbody>'
+    /* Materiales */
+    + '<tr class="doc-row"><td><div class="sec-title">Materiales</div>' + matTable + '</td></tr>'
+    /* Firma */
+    + '<tr class="doc-row"><td><div class="firma">Firma<br/><strong>Arq. Daniel Cardigni &mdash; Mat. 30288</strong></div></td></tr>'
+    + '</tbody>'
     + '</table>'
     + '</div></div>'
     + '</body></html>';
