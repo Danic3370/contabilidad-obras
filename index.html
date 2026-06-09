@@ -2044,12 +2044,22 @@ async function generarReporteObra(obraId) {
       }
     }
 
-    // Abrir el PDF como blob (iOS lo muestra en su visor nativo de PDF)
     const blob = pdf.output('blob');
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-    setTimeout(() => URL.revokeObjectURL(url), 15000);
-    toast('PDF generado.');
+    const file = new File([blob], filename, { type: 'application/pdf' });
+
+    // Web Share API: funciona en PWA standalone iOS — abre el share sheet nativo
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Reporte de Obra' });
+      toast('PDF listo.');
+    } else {
+      // Fallback desktop / Android: descarga directa
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.style.display = 'none';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast('PDF descargado.');
+    }
 
   } catch(e) {
     console.error('Error PDF:', e);
