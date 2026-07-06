@@ -750,18 +750,19 @@ async function loadPorCobrar() {
   const list = document.getElementById('por-cobrar-list');
   list.innerHTML = '<div class="loading">Cargando...</div>';
 
-  const [{ data: presups }, { data: cobros }] = await Promise.all([
+  const [{ data: _presups }, { data: _cobros }] = await Promise.all([
     db.from('presupuestos')
-      .select('id, concepto, monto, moneda, obra_id, obras(cliente, nombre)')
-      .eq('tipo', 'Honorarios')
-      .eq('estado', 'Aprobado')
+      .select('id, concepto, monto, moneda, tipo, estado, obra_id, obras(cliente, nombre)')
       .order('created_at', { ascending: false }),
     db.from('cobros')
-      .select('presupuesto_id, obra_id, monto, moneda, cotizacion')
-      .eq('tipo', 'Honorarios'),
+      .select('presupuesto_id, obra_id, monto, moneda, cotizacion, tipo'),
   ]);
 
-  if (!presups || presups.length === 0) {
+  // Filtro defensivo en JS — solo honorarios aprobados
+  const presups = (_presups || []).filter(p => p.tipo === 'Honorarios' && p.estado === 'Aprobado');
+  const cobros  = (_cobros  || []).filter(c => c.tipo === 'Honorarios');
+
+  if (presups.length === 0) {
     list.innerHTML = `<div class="empty"><i class="ti ti-cash"></i><p>No hay presupuestos de honorarios aprobados.</p></div>`;
     return;
   }
