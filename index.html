@@ -202,7 +202,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
     <div class="content">
       <div class="grid2" id="dash-metrics">
         <div class="metric"><div class="m-lbl">Dinero en caja</div><div class="m-val ok" id="d-caja">—</div></div>
-        <div class="metric"><div class="m-lbl">Por cobrar</div><div class="m-val warn" id="d-cobrar">—</div></div>
+        <div class="metric" onclick="go('p-por-cobrar')" style="cursor:pointer"><div class="m-lbl">Por cobrar <span style="font-size:9px;color:var(--blue)">▶</span></div><div class="m-val warn" id="d-cobrar">—</div></div>
         <div class="metric"><div class="m-lbl">A pagar contratistas</div><div class="m-val err" id="d-pagar">—</div></div>
         <div class="metric"><div class="m-lbl">Materiales adelantados</div><div class="m-val purp" id="d-mat">—</div></div>
       </div>
@@ -227,6 +227,14 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
       </div>
       <div class="sec">Obras activas</div>
       <div id="dash-obras-list"><div class="loading">Cargando...</div></div>
+    </div>
+  </div>
+
+  <!-- POR COBRAR DETALLE -->
+  <div class="page" id="p-por-cobrar">
+    <div class="tb"><div class="tb-row"><span class="back" onclick="goBack()"><i class="ti ti-arrow-left"></i> Inicio</span><div class="tb-title">Por cobrar</div><div style="width:44px"></div></div></div>
+    <div class="content">
+      <div id="por-cobrar-list"><div class="loading">Cargando...</div></div>
     </div>
   </div>
 
@@ -547,6 +555,7 @@ function goBack() {
 function updateNav(id) {
   const map = {
     'p-dash': 'ni-dash',
+    'p-por-cobrar': 'ni-dash',
     'p-obras': 'ni-obras', 'p-obra-detalle': 'ni-obras', 'p-obra-form': 'ni-obras',
     'p-obra-cobros': 'ni-obras', 'p-obra-pagos': 'ni-obras', 'p-obra-materiales': 'ni-obras',
     'p-presup-nuevo': 'ni-obras',
@@ -561,6 +570,7 @@ function updateNav(id) {
 
 function onPageEnter(id) {
   if (id === 'p-dash') loadDash();
+  else if (id === 'p-por-cobrar') loadPorCobrar();
   else if (id === 'p-obras') loadObras();
   else if (id === 'p-contratistas') loadContratistas();
   else if (id === 'p-cobros-list') loadCobrosList();
@@ -733,6 +743,90 @@ async function loadDash() {
         <div><div class="c-amt ${cajaMap[o.id] >= 0 ? 'ok' : 'err'}">${fmt(cajaMap[o.id])}</div><div class="c-hint ${cajaMap[o.id] >= 0 ? 'ok' : 'err'}">${cajaMap[o.id] >= 0 ? 'en caja' : 'negativo'}</div></div>
       </div>
     </div>`).join('');
+}
+
+// ---- POR COBRAR ----
+async function loadPorCobrar() {
+  const list = document.getElementById('por-cobrar-list');
+  list.innerHTML = '<div class="loading">Cargando...</div>';
+
+  const [{ data: presups }, { data: cobros }] = await Promise.all([
+    db.from('presupuestos')
+      .select('id, concepto, monto, moneda, obra_id, obras(cliente, nombre)')
+      .eq('tipo', 'Honorarios')
+      .eq('estado', 'Aprobado')
+      .order('created_at', { ascending: false }),
+    db.from('cobros')
+      .select('presupuesto_id, obra_id, monto, moneda, cotizacion')
+      .eq('tipo', 'Honorarios'),
+  ]);
+
+  if (!presups || presups.length === 0) {
+    list.innerHTML = `<div class="empty"><i class="ti ti-cash"></i><p>No hay presupuestos de honorarios aprobados.</p></div>`;
+    return;
+  }
+
+  // Cobrado por presupuesto (vinculado)
+  const cobradoByPresup = {};
+  // Cobrado por obra sin presupuesto vinculado
+  const cobradoSinVincular = {};
+  (cobros || []).forEach(c => {
+    const m = (c.moneda === 'USD' && c.cotizacion) ? c.monto * c.cotizacion : c.monto;
+    if (c.presupuesto_id) {
+      cobradoByPresup[c.presupuesto_id] = (cobradoByPresup[c.presupuesto_id] || 0) + m;
+    } else if (c.obra_id) {
+      cobradoSinVincular[c.obra_id] = (cobradoSinVincular[c.obra_id] || 0) + m;
+    }
+  });
+
+  // Si hay un solo presupuesto de honorarios por obra, los cobros sin vincular van a él
+  const presupsByObra = {};
+  (presups || []).forEach(p => {
+    if (!presupsByObra[p.obra_id]) presupsByObra[p.obra_id] = [];
+    presupsByObra[p.obra_id].push(p.id);
+  });
+  Object.entries(cobradoSinVincular).forEach(([obraId, monto]) => {
+    if (presupsByObra[obraId]?.length === 1) {
+      const pid = presupsByObra[obraId][0];
+      cobradoByPresup[pid] = (cobradoByPresup[pid] || 0) + monto;
+    }
+  });
+
+  let totalPorCobrar = 0;
+  const cards = (presups || []).map(p => {
+    const montoARS = p.monto; // presupuestos siempre en ARS por ahora
+    const cobrado = cobradoByPresup[p.id] || 0;
+    const porCobrar = Math.max(montoARS - cobrado, 0);
+    totalPorCobrar += porCobrar;
+    const pct = montoARS > 0 ? Math.min(cobrado / montoARS * 100, 100) : 0;
+    const obraLabel = p.obras ? `${p.obras.cliente} · ${p.obras.nombre}` : '—';
+    return `
+      <div class="card">
+        <div class="c-row">
+          <div style="flex:1;min-width:0">
+            <div class="c-title">${p.concepto}</div>
+            <div class="c-sub">${obraLabel}</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div class="c-amt">${fmt(montoARS)}</div>
+            <div class="c-hint ok">Cobrado: ${fmt(cobrado)}</div>
+            <div class="c-hint ${porCobrar > 0 ? 'warn' : 'ok'}">Por cobrar: ${fmt(porCobrar)}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <div class="prog-wrap" style="flex:1;margin:0"><div class="prog-fill" style="width:${pct.toFixed(1)}%"></div></div>
+          <span style="font-size:10px;color:var(--sub);flex-shrink:0">${pct.toFixed(0)}%</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  list.innerHTML = cards + `
+    <div style="background:var(--white);border-radius:12px;padding:14px 12px;border:0.5px solid #ebebeb;margin-top:4px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:12px;color:var(--sub);font-weight:500">Total por cobrar</div>
+        <div style="font-size:18px;font-weight:700;color:${totalPorCobrar > 0 ? 'var(--amber)' : 'var(--green)'}">${fmt(totalPorCobrar)}</div>
+      </div>
+    </div>`;
 }
 
 // ---- OBRAS ----
