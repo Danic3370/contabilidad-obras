@@ -588,8 +588,10 @@ async function loginUser() {
   btn.textContent = 'Ingresando...'; btn.disabled = true;
   const { error } = await db.auth.signInWithPassword({ email, password: pass });
   if (error) {
-    errEl.textContent = error.message === 'Invalid login credentials'
-      ? 'Email o contraseña incorrectos.' : error.message;
+    const msg = error.message === 'Invalid login credentials' ? 'Email o contraseña incorrectos.'
+      : error.message === 'Email not confirmed' ? 'Confirmá tu email antes de ingresar.'
+      : error.message;
+    errEl.textContent = msg;
     btn.textContent = 'Ingresar'; btn.disabled = false;
   }
 }
@@ -697,7 +699,7 @@ async function loadDash() {
   const [{ data: cajaDat }, { data: contDat }, { data: cobDat }, { data: matDat }, { data: obrasDat }] = await Promise.all([
     db.from('caja_obras').select('*'),
     db.from('deuda_contratistas').select('deuda'),
-    db.from('cobros').select('monto, presupuesto_id'),
+    db.from('cobros').select('monto, presupuesto_id, tipo'),
     db.from('materiales').select('monto, es_adelanto'),
     db.from('obras').select('id, cliente, nombre, estado').eq('estado', 'Activa').order('created_at', { ascending: false }).limit(3)
   ]);
@@ -706,11 +708,11 @@ async function loadDash() {
   const totalPagar = (contDat || []).reduce((s, r) => s + Math.max(r.deuda || 0, 0), 0);
   const totalMatAdelanto = (matDat || []).filter(m => m.es_adelanto).reduce((s, r) => s + (r.monto || 0), 0);
 
-  // Por cobrar = suma de presupuestos aprobados - cobrado
-  const { data: presupsDat } = await db.from('presupuestos').select('monto').eq('estado', 'Aprobado');
-  const totalPresupAprobado = (presupsDat || []).reduce((s, r) => s + (r.monto || 0), 0);
-  const totalCobrado = (cobDat || []).reduce((s, r) => s + (r.monto || 0), 0);
-  const porCobrar = Math.max(totalPresupAprobado - totalCobrado, 0);
+  // Por cobrar = honorarios presupuestados (aprobados) - honorarios ya cobrados
+  const { data: presupsDat } = await db.from('presupuestos').select('monto').eq('estado', 'Aprobado').eq('tipo', 'Honorarios');
+  const totalPresupHonorarios = (presupsDat || []).reduce((s, r) => s + (r.monto || 0), 0);
+  const totalCobradoHonorarios = (cobDat || []).filter(r => r.tipo === 'Honorarios').reduce((s, r) => s + (r.monto || 0), 0);
+  const porCobrar = Math.max(totalPresupHonorarios - totalCobradoHonorarios, 0);
 
   document.getElementById('d-caja').textContent = fmt(totalCaja);
   document.getElementById('d-cobrar').textContent = fmt(porCobrar);
@@ -796,9 +798,24 @@ async function loadObraDetalle(id) {
 
   // Maps para barras de progreso
   const cobradoByPresup = {};
+  let cobradoHonSinPresup = 0;
   (cobros || []).forEach(c => {
-    if (c.presupuesto_id) cobradoByPresup[c.presupuesto_id] = (cobradoByPresup[c.presupuesto_id] || 0) + c.monto;
+    const m = (c.moneda === 'USD' && c.cotizacion) ? c.monto * c.cotizacion : c.monto;
+    if (c.presupuesto_id) {
+      cobradoByPresup[c.presupuesto_id] = (cobradoByPresup[c.presupuesto_id] || 0) + m;
+    } else if (c.tipo === 'Honorarios') {
+      // Cobro de honorarios sin presupuesto vinculado — lo acumulamos aparte
+      cobradoHonSinPresup += m;
+    }
   });
+  // Si hay cobros de honorarios sin vincular y existe un único presupuesto de
+  // honorarios en la obra, los atribuimos automáticamente a ese presupuesto
+  if (cobradoHonSinPresup > 0) {
+    const honPresups = (presups || []).filter(p => p.tipo === 'Honorarios');
+    if (honPresups.length === 1) {
+      cobradoByPresup[honPresups[0].id] = (cobradoByPresup[honPresups[0].id] || 0) + cobradoHonSinPresup;
+    }
+  }
   const pagadoByPresup = {};
   (pagos || []).forEach(p => {
     if (p.presupuesto_id) {
@@ -1359,11 +1376,15 @@ async function saveCobro() {
   };
   if (!payload.obra_id || !payload.monto) { toast('Completá obra y monto.', false); return; }
   const id = editCobro?.id;
-  const { error } = id
-    ? await db.from('cobros').update(payload).eq('id', id)
-    : await db.from('cobros').insert(payload);
-  if (error) { toast('Error al guardar.', false); return; }
-  const savedId = id || (await db.from('cobros').select('id').eq('obra_id', payload.obra_id).order('created_at', { ascending: false }).limit(1)).data?.[0]?.id;
+  let savedId = id;
+  if (id) {
+    const { error } = await db.from('cobros').update(payload).eq('id', id);
+    if (error) { toast('Error al guardar.', false); return; }
+  } else {
+    const { data: inserted, error } = await db.from('cobros').insert(payload).select('id').single();
+    if (error) { toast('Error al guardar.', false); return; }
+    savedId = inserted?.id;
+  }
   toast(id ? 'Cobro actualizado.' : 'Cobro registrado.');
   editCobro = null;
   document.getElementById('f-cobro-monto').value = '';
