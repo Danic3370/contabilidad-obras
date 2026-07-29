@@ -2542,16 +2542,22 @@ function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
   const cMap={};
   pMO.forEach(p=>{const cid=p.contratista_id||'__n';if(!cMap[cid])cMap[cid]={nombre:p.contratistas?.nombre||'Sin asignar',presups:[]};cMap[cid].presups.push(p);});
   pagos.forEach(p=>{const cid=p.contratista_id||'__n';if(!cMap[cid])cMap[cid]={nombre:p.contratistas?.nombre||'Sin identificar',presups:[]};});
-  const pBC={},pgBC={};
+  const pBC={},pgBC={},pByPID={};
   pagos.forEach(p=>{
     const cid=p.contratista_id||'__n',v=toARS(p.monto,p.moneda,p.cotizacion)+(p.beneficio_arquitecto||0);
     pBC[cid]=(pBC[cid]||0)+v;if(!pgBC[cid])pgBC[cid]=[];
     pgBC[cid].push({fecha:p.fecha,notas:p.notas,_v:v});
+    if(p.presupuesto_id)pByPID[p.presupuesto_id]=(pByPID[p.presupuesto_id]||0)+v;
   });
   const moSecs=[];let moFirst=true;
   Object.entries(cMap).forEach(([cid,cont])=>{
     const sP=cont.presups.reduce((s,p)=>s+p.monto,0),sPag=pBC[cid]||0,sd=sP-sPag;
-    const rP=cont.presups.map(p=>'<tr><td style="padding-left:12px">'+_escHtml(p.concepto)+(p.estado!=='Aprobado'?' <span class="usd">('+p.estado+')</span>':'')+'</td><td class="num">'+fm(p.monto)+(p.moneda==='USD'?' <span class="usd">USD</span>':'')+'</td><td></td><td></td></tr>').join('');
+    const rP=cont.presups.map(p=>{const pagP=pByPID[p.id]||0,sdP=p.monto-pagP;
+      return '<tr><td style="padding-left:12px">'+_escHtml(p.concepto)+(p.estado!=='Aprobado'?' <span class="usd">('+p.estado+')</span>':'')+'</td>'
+        +'<td class="num">'+fm(p.monto)+(p.moneda==='USD'?' <span class="usd">USD</span>':'')+'</td>'
+        +'<td class="num ok">'+fm(pagP)+'</td>'
+        +'<td class="num '+(sdP>0?'warn':'ok')+'">'+fm(sdP)+'</td></tr>';
+    }).join('');
     const pgs=pgBC[cid]||[];
     const rPg=pgs.length===0?''
       :'<tr><td colspan="4" class="pago-subhd">Pagos realizados</td></tr>'
