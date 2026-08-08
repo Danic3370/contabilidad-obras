@@ -166,6 +166,44 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
 .modal-overlay.open{display:flex}
 .modal{background:var(--white);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;padding-bottom:calc(20px + env(safe-area-inset-bottom,0px))}
 .modal-title{font-size:15px;font-weight:600;margin-bottom:16px}
+
+/* ---- CAMPO DE MONTO (centavos resaltados) ---- */
+.mwrap{position:relative;display:block}
+.mwrap .mpre{
+  position:absolute;left:11px;top:0;bottom:0;display:flex;align-items:center;
+  font-family:inherit;font-size:14px;color:var(--sub);pointer-events:none;z-index:2
+}
+.mwrap input.minput{
+  padding-left:25px;color:transparent;caret-color:var(--text);
+  font-family:inherit;font-weight:400;letter-spacing:normal;
+  position:relative;z-index:1;background:transparent
+}
+.mwrap input.minput::placeholder{color:transparent}
+.mwrap .mghost{
+  position:absolute;inset:0;border:0.5px solid transparent;
+  padding:9px 11px 9px 25px;display:flex;align-items:center;
+  font-family:inherit;font-size:14px;font-weight:400;letter-spacing:normal;
+  color:var(--text);white-space:pre;overflow:hidden;pointer-events:none;z-index:0
+}
+.mwrap .mph{color:#bbb}
+.mcents{font-size:12px;color:var(--amber);font-weight:500}
+.mwrap.has-cents input.minput{border-color:var(--amber)}
+.mhint{font-size:10px;margin-top:3px;display:none;line-height:1.3}
+.mhint.on{display:block}
+.mhint.plain{color:var(--sub)}
+.mhint.warn-h{color:var(--amber);font-weight:500}
+.mfix{text-decoration:underline;font-weight:600;cursor:pointer;padding:2px 0}
+
+/* ---- MODAL CONFIRMAR MONTO ---- */
+.cm-sub{font-size:12px;color:var(--sub);margin:-10px 0 14px;line-height:1.4;white-space:pre-line}
+.cm-amt{background:#FFF8EC;border:0.5px solid #F5DFB8;border-radius:12px;padding:16px 12px;text-align:center;margin-bottom:16px}
+.cm-amt.clean{background:#F4F8FC;border-color:#DCE8F4}
+.cm-num{font-size:30px;font-weight:600;color:var(--text);line-height:1.15}
+.cm-num .mcents{font-size:16px}
+.cm-words{font-size:11px;color:var(--sub);margin-top:7px;line-height:1.45}
+.cm-warn{font-size:11px;color:var(--amber);font-weight:600;margin-top:8px}
+.cm-row{display:flex;gap:8px}
+.cm-row button{flex:1;margin-top:0}
 </style>
 </head>
 <body>
@@ -505,6 +543,23 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
 </div><!-- /app -->
 
 <div id="toast"></div>
+
+<!-- Confirmación de monto -->
+<div class="modal-overlay" id="cm-overlay">
+  <div class="modal">
+    <div class="modal-title" id="cm-title">Confirmá el monto</div>
+    <div class="cm-sub" id="cm-sub"></div>
+    <div class="cm-amt" id="cm-amt">
+      <div class="cm-num" id="cm-num">$0</div>
+      <div class="cm-words" id="cm-words"></div>
+      <div class="cm-warn" id="cm-warn"></div>
+    </div>
+    <div class="cm-row">
+      <button class="btn-ghost" onclick="cmResolve(false)">Volver a editar</button>
+      <button class="btn-main" onclick="cmResolve(true)">Confirmar</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ============================================================
@@ -1388,6 +1443,11 @@ async function savePresupuesto() {
     notas: document.getElementById('f-presup-notas').value.trim() || null,
   };
   if (!payload.concepto || !payload.obra_id) { toast('Completá obra y concepto.', false); return; }
+  if (!await confirmMonto({
+    titulo: id ? 'Confirmá los cambios' : 'Confirmá el presupuesto',
+    sub: 'Vas a registrar un presupuesto de ' + payload.concepto + ' · ' + selTxt('f-presup-obra'),
+    monto: payload.monto, moneda: payload.moneda
+  })) return;
   const { error } = id
     ? await db.from('presupuestos').update(payload).eq('id', id)
     : await db.from('presupuestos').insert(payload);
@@ -1471,6 +1531,11 @@ async function saveCobro() {
   };
   if (!payload.obra_id || !payload.monto) { toast('Completá obra y monto.', false); return; }
   const id = editCobro?.id;
+  if (!await confirmMonto({
+    titulo: id ? 'Confirmá los cambios' : 'Confirmá el cobro',
+    sub: 'Vas a registrar un cobro de ' + payload.tipo + ' · ' + selTxt('f-cobro-obra'),
+    monto: payload.monto, moneda
+  })) return;
   let savedId = id;
   if (id) {
     const { error } = await db.from('cobros').update(payload).eq('id', id);
@@ -1585,6 +1650,11 @@ async function saveMaterial() {
   };
   if (!payload.descripcion) { toast('Ingresá una descripción.', false); return; }
   const id = editMaterial?.id;
+  if (!await confirmMonto({
+    titulo: id ? 'Confirmá los cambios' : 'Confirmá la compra',
+    sub: 'Vas a registrar una compra de ' + payload.descripcion + ' · ' + selTxt('f-mat-obra'),
+    monto, moneda
+  })) return;
   const { error } = id
     ? await db.from('materiales').update(payload).eq('id', id)
     : await db.from('materiales').insert(payload);
@@ -1735,6 +1805,12 @@ async function savePago() {
     notas: document.getElementById('f-pago-notas').value.trim() || null,
   };
   const id = editPago?.id;
+  if (!await confirmMonto({
+    titulo: id ? 'Confirmá los cambios' : 'Confirmá el pago',
+    sub: 'Vas a registrar un pago a ' + selTxt('f-pago-contratista') + ' · ' + selTxt('f-pago-obra')
+      + (beneficio > 0 ? '\nMás ' + fmt(beneficio) + ' de tu beneficio · total ' + fmt(monto + beneficio) : ''),
+    monto, moneda
+  })) return;
   const { error } = id
     ? await db.from('pagos_contratistas').update(payload).eq('id', id)
     : await db.from('pagos_contratistas').insert(payload);
@@ -2645,6 +2721,180 @@ function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
     active = false;
   }, { passive: true });
 })();
+
+// ============================================================
+//  CAMPOS DE MONTO — centavos en tipografía chica y ámbar
+// ============================================================
+const MONEY_IDS = [
+  'f-presup-monto', 'f-presup-costo',
+  'f-cobro-monto', 'f-cobro-cot',
+  'f-mat-monto', 'f-mat-cot',
+  'f-pago-monto', 'f-pago-cot', 'f-pago-beneficio',
+  'r-efectivo', 'r-transferencia'
+];
+
+// Normaliza lo tipeado. El valor real del input siempre usa punto como
+// separador decimal, así el parseFloat() del resto de la app sigue funcionando.
+//   0 separadores  -> entero
+//   1 separador    -> decimal (punto o coma, como eligió el usuario)
+//   2+ separadores -> los puntos son de miles y se descartan; si hay una
+//                     sola coma, esa coma es el decimal.
+function sanitizeMoney(raw) {
+  const s = String(raw == null ? '' : raw).replace(/[^0-9.,]/g, '');
+  const seps = (s.match(/[.,]/g) || []).length;
+  if (seps === 0) return s;
+  if (seps === 1) {
+    const i = s.search(/[.,]/);
+    return s.slice(0, i) + '.' + s.slice(i + 1);
+  }
+  if ((s.match(/,/g) || []).length === 1) {
+    const i = s.indexOf(',');
+    return s.slice(0, i).replace(/\./g, '') + '.' + s.slice(i + 1).replace(/\./g, '');
+  }
+  return s.replace(/[.,]/g, '');
+}
+
+function paintMoney(input) {
+  const wrap = input.parentElement;
+  if (!wrap || !wrap.classList.contains('mwrap')) return;
+  const ghost = wrap.querySelector('.mghost');
+  const hint = wrap.nextElementSibling;
+  const v = String(input.value == null ? '' : input.value);
+  const i = v.indexOf('.');
+  const ent = i === -1 ? v : v.slice(0, i);
+  const dec = i === -1 ? null : v.slice(i + 1);
+
+  if (v === '') {
+    ghost.innerHTML = '<span class="mph">' + (input.dataset.ph || '0') + '</span>';
+    wrap.classList.remove('has-cents');
+    if (hint) { hint.className = 'mhint'; hint.textContent = ''; }
+    return;
+  }
+
+  ghost.innerHTML = ent + (dec === null ? '' : '<span class="mcents">,' + dec + '</span>');
+
+  const entNum = parseInt(ent || '0', 10) || 0;
+  const hasCents = dec !== null && dec !== '' && parseInt(dec, 10) > 0;
+  wrap.classList.toggle('has-cents', hasCents);
+
+  if (!hint) return;
+  if (!hasCents) {
+    hint.className = 'mhint on plain';
+    hint.textContent = '= $' + entNum.toLocaleString('es-AR');
+    return;
+  }
+
+  hint.className = 'mhint on warn-h';
+  if (dec.length <= 2) {
+    hint.textContent = '⚠ ' + entNum.toLocaleString('es-AR') + ' pesos con ' + dec.padEnd(2, '0') + ' centavos';
+    return;
+  }
+
+  // 3+ decimales: casi siempre es un punto de miles mal puesto.
+  // Ofrecemos la corrección de un toque.
+  const asMiles = (ent + dec).replace(/^0+(?=\d)/, '');
+  hint.innerHTML = '⚠ ' + entNum.toLocaleString('es-AR') + ' pesos con 0,' + dec +
+    ' — ¿querías <span class="mfix">$' + Number(asMiles).toLocaleString('es-AR') + '</span>?';
+  const fixEl = hint.querySelector('.mfix');
+  if (fixEl) fixEl.onclick = () => { input.value = asMiles; input.focus(); };
+}
+
+function initMoneyFields() {
+  const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  MONEY_IDS.forEach(id => {
+    const input = document.getElementById(id);
+    if (!input || input.dataset.money) return;
+    input.dataset.money = '1';
+    input.dataset.ph = input.getAttribute('placeholder') || '0';
+    input.type = 'text';
+    input.setAttribute('inputmode', 'decimal');
+    input.setAttribute('autocomplete', 'off');
+    input.classList.add('minput');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'mwrap';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+
+    const pre = document.createElement('span');
+    pre.className = 'mpre';
+    pre.textContent = '$';
+    wrap.appendChild(pre);
+
+    const ghost = document.createElement('div');
+    ghost.className = 'mghost';
+    wrap.appendChild(ghost);
+
+    const hint = document.createElement('div');
+    hint.className = 'mhint';
+    wrap.parentNode.insertBefore(hint, wrap.nextSibling);
+
+    input.addEventListener('input', () => {
+      const before = input.value;
+      const caret = input.selectionStart;
+      const clean = sanitizeMoney(before);
+      if (clean !== before) {
+        desc.set.call(input, clean);
+        const shift = before.length - clean.length;
+        const pos = Math.max(0, (caret == null ? clean.length : caret) - shift);
+        try { input.setSelectionRange(pos, pos); } catch (e) {}
+      }
+      paintMoney(input);
+    });
+
+    // Interceptar asignaciones .value hechas por el resto de la app
+    Object.defineProperty(input, 'value', {
+      configurable: true,
+      get() { return desc.get.call(input); },
+      set(v) { desc.set.call(input, v == null ? '' : String(v)); paintMoney(input); }
+    });
+
+    paintMoney(input);
+  });
+}
+
+// ============================================================
+//  MODAL DE CONFIRMACIÓN DE MONTO
+// ============================================================
+let _cmResolve = null;
+
+function selTxt(id) {
+  const e = document.getElementById(id);
+  return e && e.selectedIndex >= 0 ? e.options[e.selectedIndex].text : '';
+}
+
+function cmResolve(ok) {
+  document.getElementById('cm-overlay').classList.remove('open');
+  const r = _cmResolve;
+  _cmResolve = null;
+  if (r) r(ok);
+}
+
+function confirmMonto({ titulo, sub, monto, moneda = 'ARS' }) {
+  return new Promise(resolve => {
+    const abs = Math.abs(monto);
+    const ent = Math.floor(abs);
+    const cents = Math.round((abs - ent) * 100);
+    const pre = moneda === 'USD' ? 'u$d ' : '$';
+    const unidad = moneda === 'USD' ? 'dólares' : 'pesos';
+
+    document.getElementById('cm-title').textContent = titulo;
+    document.getElementById('cm-sub').textContent = sub || '';
+    document.getElementById('cm-num').innerHTML =
+      (monto < 0 ? '-' : '') + pre + ent.toLocaleString('es-AR') +
+      (cents > 0 ? '<span class="mcents">,' + String(cents).padStart(2, '0') + '</span>' : '');
+    document.getElementById('cm-words').textContent =
+      numToWords(ent) + ' ' + unidad + (cents > 0 ? ' con ' + String(cents).padStart(2, '0') + '/100' : '');
+    document.getElementById('cm-warn').textContent =
+      cents > 0 ? '⚠ Este monto incluye centavos' : '';
+    document.getElementById('cm-amt').className = 'cm-amt' + (cents > 0 ? '' : ' clean');
+
+    _cmResolve = resolve;
+    document.getElementById('cm-overlay').classList.add('open');
+  });
+}
+
+initMoneyFields();
 
 // Registrar service worker
 if ('serviceWorker' in navigator) {
