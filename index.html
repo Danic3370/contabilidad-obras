@@ -2757,27 +2757,27 @@ function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
     +'<div class="card-item"><div class="card-lbl">Total pagado materiales</div><div class="card-val">'+fm(totalMateriales)+'</div></div>'
     +'</div>';
 
-  // MO: sec-title como ítem 0, cada cont-box como ítem independiente
-  // → el paginador puede distribuirlos entre páginas sin cortar nada
+  // MO: sec-title SIEMPRE unido al primer cont-box → nunca queda huérfano al final de página
   const moEntries = (()=>{
     if(moSecs.length===1&&!moSecs[0].startsWith('<div class="cont-box">')){
-      // sin contratistas: un bloque simple
       return ['<div style="margin-top:12px"><div class="sec-title">Mano de Obra</div><div style="height:4px"></div><div class="sec-box">'+moSecs[0]+'</div></div>'];
     }
-    return moSecs.map((s,i)=>{
-      if(i===0) return '<div style="margin-top:12px">'+s+'</div>';  // sec-title
-      if(i===1) return '<div style="margin-top:4px">'+s+'</div>';   // primer cont-box (4px bajo sec-title)
-      return '<div style="margin-top:8px">'+s+'</div>';              // cont-boxes siguientes
-    });
+    const entries=[];
+    // sec-title + primer cont-box juntos (son adyacentes → CSS .sec-title+.cont-box aplica)
+    entries.push('<div style="margin-top:12px">'+moSecs[0]+(moSecs[1]||'')+'</div>');
+    for(let i=2;i<moSecs.length;i++) entries.push('<div style="margin-top:8px">'+moSecs[i]+'</div>');
+    return entries;
   })();
 
-  // Mat: sec-title + primer chunk como ítem 0, chunks siguientes como ítems independientes
-  // → cada tabla tiene su propio encabezado y aparece en la página correcta
-  const matEntries = matSecs.map((tbl,i)=>
-    i===0
-      ? '<div style="margin-top:12px"><div class="sec-title">Materiales</div><div style="height:4px"></div><div class="sec-box">'+tbl+'</div></div>'
-      : '<div style="margin-top:8px"><div class="sec-box">'+tbl+'</div></div>'
-  );
+  // Mat: una sola tabla con un solo <thead> → sin doble encabezado
+  // Si hay muchas filas y no entra en una página, el paginador la pone en página propia
+  const matSingleContent = mats.length===0
+    ? '<p class="enota">Sin compras registradas.</p>'
+    : '<table class="tbl"><thead><tr><th class="dn">Fecha</th><th>Descripción</th><th class="num">Importe</th></tr></thead>'
+      +'<tbody>'+matRowsArr.join('')+'</tbody>'
+      +'<tfoot><tr class="tftr"><td colspan="2"><strong>TOTAL MATERIALES</strong></td>'
+      +'<td class="num"><strong>'+fm(totMat)+'</strong></td></tr></tfoot></table>';
+  const matEntries = ['<div style="margin-top:12px"><div class="sec-title">Materiales</div><div style="height:4px"></div><div class="sec-box">'+matSingleContent+'</div></div>'];
 
   return {
     headerHTML,
