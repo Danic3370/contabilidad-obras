@@ -478,7 +478,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
   <div class="page" id="p-pago-form">
     <div class="tb"><div class="tb-row"><span class="back" onclick="goBack()"><i class="ti ti-arrow-left"></i> Volver</span><div class="tb-title" id="pago-form-title">Pago a contratista</div><div style="width:44px"></div></div></div>
     <div class="content">
-      <div class="field"><label>Contratista *</label><select id="f-pago-contratista" onchange="loadPresupsByContratista(this.value)"><option value="">Seleccionar...</option></select></div>
+      <div class="field"><label>Contratista *</label><select id="f-pago-contratista" onchange="onPagoContratistaChange(this.value)"><option value="">Seleccionar...</option></select></div>
       <div class="field"><label>Obra *</label><select id="f-pago-obra" onchange="loadCajaForPago(this.value)"><option value="">Elegí una obra...</option></select></div>
       <div id="f-pago-caja-box"></div>
       <div class="field"><label>Presupuesto asociado</label><select id="f-pago-presup"><option value="">Seleccionar...</option></select></div>
@@ -585,6 +585,10 @@ let currentContratistaId = null;
 let editObra = null;
 let editContratista = null;
 let editPresup = null;
+// Flujo: nuevo contratista + presup desde el form de pagos
+let pagoFlowActivo = false;      // estamos en el flujo pago→contratista→presup
+let pagoFlowContId = null;       // ID del nuevo contratista a pre-seleccionar al volver
+let pagoFlowPresupContId = null; // ID para pre-seleccionar en initPresupForm
 let allObras = [];
 let allContratistas = [];
 let editCobro = null;
@@ -1217,12 +1221,24 @@ async function saveContratista() {
     notas: document.getElementById('f-cont-notas').value.trim() || null,
   };
   if (!payload.nombre) { toast('Ingresá el nombre.', false); return; }
-  const { error } = id
-    ? await db.from('contratistas').update(payload).eq('id', id)
-    : await db.from('contratistas').insert(payload);
-  if (error) { toast('Error al guardar.', false); return; }
+  let newContId = null;
+  if (id) {
+    const { error } = await db.from('contratistas').update(payload).eq('id', id);
+    if (error) { toast('Error al guardar.', false); return; }
+  } else {
+    const { data: ins, error } = await db.from('contratistas').insert(payload).select('id').single();
+    if (error) { toast('Error al guardar.', false); return; }
+    newContId = ins?.id;
+  }
   toast(id ? 'Contratista actualizado.' : 'Contratista creado.');
   editContratista = null;
+  // Flujo pago → nuevo contratista → nuevo presupuesto
+  if (!id && pagoFlowActivo && newContId) {
+    pagoFlowContId = newContId;
+    pagoFlowPresupContId = newContId;
+    go('p-presup-nuevo');
+    return;
+  }
   goBack();
 }
 
@@ -1364,10 +1380,8 @@ async function initPresupForm() {
     db.from('contratistas').select('id, nombre').order('nombre')
   ]);
   const obrasSel = document.getElementById('f-presup-obra');
-  const currentObraVal = obrasSel.value;
   obrasSel.innerHTML = '<option value="">Elegí una obra...</option>' +
     (obras || []).map(o => `<option value="${o.id}">${o.cliente} · ${o.nombre}</option>`).join('');
-  if (currentObraVal) obrasSel.value = currentObraVal;
 
   const contSel = document.getElementById('f-presup-contratista');
   contSel.innerHTML = '<option value="">Seleccionar...</option>' +
@@ -1376,6 +1390,8 @@ async function initPresupForm() {
   if (!editPresup) {
     document.getElementById('presup-form-title').textContent = 'Nuevo presupuesto';
     document.getElementById('f-presup-id').value = '';
+    obrasSel.value = '';
+    contSel.value = '';
     document.getElementById('f-presup-concepto').value = '';
     document.getElementById('f-presup-monto').value = '';
     document.getElementById('f-presup-costo').value = '';
@@ -1385,6 +1401,13 @@ async function initPresupForm() {
     document.getElementById('f-presup-notas').value = '';
     document.getElementById('mo-section').style.display = 'none';
     document.getElementById('presup-form-delete').style.display = 'none';
+    // Al venir del flujo pago → nuevo contratista: pre-seleccionar contratista y tipo MO
+    if (pagoFlowPresupContId) {
+      contSel.value = pagoFlowPresupContId;
+      document.getElementById('f-presup-tipo').value = 'Mano de obra';
+      document.getElementById('mo-section').style.display = 'block';
+      pagoFlowPresupContId = null;
+    }
   } else {
     document.getElementById('presup-form-title').textContent = 'Editar presupuesto';
     document.getElementById('f-presup-id').value = editPresup.id;
@@ -1452,13 +1475,25 @@ async function savePresupuesto() {
     sub: 'Vas a registrar un presupuesto de ' + payload.concepto + ' · ' + selTxt('f-presup-obra'),
     monto: payload.monto, moneda: payload.moneda
   })) return;
-  const { error } = id
-    ? await db.from('presupuestos').update(payload).eq('id', id)
-    : await db.from('presupuestos').insert(payload);
-  if (error) { toast('Error al guardar.', false); return; }
-  toast(id ? 'Presupuesto actualizado.' : 'Presupuesto creado.');
-  editPresup = null;
-  goBack();
+  if (id) {
+    const { error } = await db.from('presupuestos').update(payload).eq('id', id);
+    if (error) { toast('Error al guardar.', false); return; }
+    toast('Presupuesto actualizado.');
+    editPresup = null;
+    goBack();
+  } else {
+    const { error } = await db.from('presupuestos').insert(payload);
+    if (error) { toast('Error al guardar.', false); return; }
+    toast('Presupuesto creado.');
+    editPresup = null;
+    // Flujo pago → nuevo contratista → nuevo presupuesto → volver al form de pagos
+    if (pagoFlowActivo) {
+      pagoFlowActivo = false;
+      go('p-pago-form'); // initPagoForm detectará pagoFlowContId y pre-seleccionará
+      return;
+    }
+    goBack();
+  }
 }
 
 async function deletePresupuesto() {
@@ -1722,7 +1757,8 @@ async function initPagoForm() {
   const contSel = document.getElementById('f-pago-contratista');
   const obraSel = document.getElementById('f-pago-obra');
   contSel.innerHTML = '<option value="">Seleccionar...</option>' +
-    (conts || []).map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+    (conts || []).map(c => `<option value="${c.id}">${c.nombre}</option>`).join('') +
+    (!editPago ? '<option value="__nuevo__" style="color:#F07800;font-weight:700">+ Nuevo contratista...</option>' : '');
   obraSel.innerHTML = '<option value="">Elegí una obra...</option>' +
     (obras || []).map(o => `<option value="${o.id}">${o.cliente} · ${o.nombre}</option>`).join('');
   const titleEl = document.getElementById('pago-form-title');
@@ -1730,9 +1766,10 @@ async function initPagoForm() {
   if (editPago) {
     titleEl.textContent = 'Editar pago'; delEl.style.display = 'block';
     contSel.value = editPago.contratista_id || '';
-    obraSel.value = editPago.obra_id || ''; loadCajaForPago(editPago.obra_id);
-    loadPresupsByContratista(editPago.contratista_id);
-    setTimeout(() => { document.getElementById('f-pago-presup').value = editPago.presupuesto_id || ''; }, 250);
+    obraSel.value = editPago.obra_id || '';
+    await loadCajaForPago(editPago.obra_id);
+    await loadPresupsByContratista(editPago.contratista_id);
+    document.getElementById('f-pago-presup').value = editPago.presupuesto_id || '';
     document.getElementById('f-pago-monto').value = editPago.monto;
     document.getElementById('f-pago-beneficio').value = editPago.beneficio_arquitecto || 0;
     actualizarTotalPago();
@@ -1745,12 +1782,36 @@ async function initPagoForm() {
     document.getElementById('f-pago-notas').value = editPago.notas || '';
   } else {
     titleEl.textContent = 'Pago a contratista'; delEl.style.display = 'none';
+    contSel.value = '';
+    obraSel.value = '';
+    document.getElementById('f-pago-caja-box').innerHTML = '';
+    document.getElementById('f-pago-presup').innerHTML = '<option value="">Sin presupuesto específico</option>';
+    document.getElementById('f-pago-monto').value = '';
+    document.getElementById('f-pago-moneda').value = 'ARS';
+    document.getElementById('f-pago-cot').value = '';
+    document.getElementById('f-pago-cot-box').style.display = 'none';
     document.getElementById('f-pago-beneficio').value = 0;
     document.getElementById('f-pago-total-box').innerHTML = '';
-    const curCont = contSel.value; const curObra = obraSel.value;
-    if (curCont) contSel.value = curCont;
-    if (curObra) { obraSel.value = curObra; loadCajaForPago(curObra); }
     document.getElementById('f-pago-fecha').value = today();
+    document.getElementById('f-pago-notas').value = '';
+    // Al volver del flujo nuevo-contratista: pre-seleccionar y cargar sus presups
+    if (pagoFlowContId) {
+      contSel.value = pagoFlowContId;
+      await loadPresupsByContratista(pagoFlowContId);
+      pagoFlowContId = null;
+    }
+  }
+}
+
+function onPagoContratistaChange(val) {
+  if (val === '__nuevo__') {
+    document.getElementById('f-pago-contratista').value = '';
+    pagoFlowActivo = true;
+    editContratista = null;
+    renderContratistaForm();
+    go('p-contratista-form');
+  } else {
+    loadPresupsByContratista(val);
   }
 }
 
@@ -1796,6 +1857,13 @@ async function savePago() {
   const { data: cajaDat } = await db.from('caja_obras').select('caja').eq('id', obraId).single();
   const caja = cajaDat?.caja || 0;
   const beneficio = parseFloat(document.getElementById('f-pago-beneficio').value) || 0;
+  const id = editPago?.id;
+  // En edición, caja_obras ya tiene el pago original descontado → lo sumamos de vuelta
+  // para reconstruir el saldo real disponible antes del pago y comparar correctamente.
+  const montoARSOrig = id
+    ? ((editPago.moneda === 'USD' ? (editPago.monto || 0) * (editPago.cotizacion || 1) : (editPago.monto || 0)) + (editPago.beneficio_arquitecto || 0))
+    : 0;
+  const cajaEfectiva = caja + montoARSOrig;
   const payload = {
     contratista_id: contId,
     obra_id: obraId,
@@ -1804,11 +1872,10 @@ async function savePago() {
     moneda,
     cotizacion,
     fecha: document.getElementById('f-pago-fecha').value || today(),
-    es_adelanto: caja < montoARS + beneficio,
+    es_adelanto: cajaEfectiva < montoARS + beneficio,
     beneficio_arquitecto: beneficio,
     notas: document.getElementById('f-pago-notas').value.trim() || null,
   };
-  const id = editPago?.id;
   if (!await confirmMonto({
     titulo: id ? 'Confirmá los cambios' : 'Confirmá el pago',
     sub: 'Vas a registrar un pago a ' + selTxt('f-pago-contratista') + ' · ' + selTxt('f-pago-obra')
@@ -2690,14 +2757,36 @@ function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
     +'<div class="card-item"><div class="card-lbl">Total pagado materiales</div><div class="card-val">'+fm(totalMateriales)+'</div></div>'
     +'</div>';
 
+  // MO: sec-title como ítem 0, cada cont-box como ítem independiente
+  // → el paginador puede distribuirlos entre páginas sin cortar nada
+  const moEntries = (()=>{
+    if(moSecs.length===1&&!moSecs[0].startsWith('<div class="cont-box">')){
+      // sin contratistas: un bloque simple
+      return ['<div style="margin-top:12px"><div class="sec-title">Mano de Obra</div><div style="height:4px"></div><div class="sec-box">'+moSecs[0]+'</div></div>'];
+    }
+    return moSecs.map((s,i)=>{
+      if(i===0) return '<div style="margin-top:12px">'+s+'</div>';  // sec-title
+      if(i===1) return '<div style="margin-top:4px">'+s+'</div>';   // primer cont-box (4px bajo sec-title)
+      return '<div style="margin-top:8px">'+s+'</div>';              // cont-boxes siguientes
+    });
+  })();
+
+  // Mat: sec-title + primer chunk como ítem 0, chunks siguientes como ítems independientes
+  // → cada tabla tiene su propio encabezado y aparece en la página correcta
+  const matEntries = matSecs.map((tbl,i)=>
+    i===0
+      ? '<div style="margin-top:12px"><div class="sec-title">Materiales</div><div style="height:4px"></div><div class="sec-box">'+tbl+'</div></div>'
+      : '<div style="margin-top:8px"><div class="sec-box">'+tbl+'</div></div>'
+  );
+
   return {
     headerHTML,
     summaryHTML,
     sections: [
       '<div style="margin-top:12px"><div class="sec-title">Cobros al cliente</div><div style="height:4px"></div><div class="sec-box">'+cobrosSecs.join('')+'</div></div>',
       '<div style="margin-top:12px"><div class="sec-title">Honorarios</div><div style="height:4px"></div><div class="sec-box">'+honContent+'</div></div>',
-      '<div style="margin-top:12px">'+moSecs.join('')+'</div>',
-      '<div style="margin-top:12px"><div class="sec-title">Materiales</div><div style="height:4px"></div><div class="sec-box">'+matSecs.join('')+'</div></div>',
+      ...moEntries,
+      ...matEntries,
       '<div class="firma">Firma<br/><strong>Arq. Daniel Cardigni &mdash; Mat. 30288</strong></div>'
     ]
   };
