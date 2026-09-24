@@ -774,7 +774,7 @@ async function loadDash() {
     db.from('deuda_contratistas').select('deuda'),
     db.from('cobros').select('monto, presupuesto_id, tipo'),
     db.from('materiales').select('monto, es_adelanto'),
-    db.from('obras').select('id, cliente, nombre, estado').eq('estado', 'Activa').order('created_at', { ascending: false }).limit(3)
+    db.from('obras').select('id, cliente, nombre, estado').eq('estado', 'Activa').order('created_at', { ascending: false })
   ]);
 
   const totalCaja = (cajaDat || []).reduce((s, r) => s + (r.caja || 0), 0);
