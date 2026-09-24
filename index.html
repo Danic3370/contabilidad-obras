@@ -2265,7 +2265,14 @@ async function generarReporteObra(obraId) {
     await new Promise(r => requestAnimationFrame(r));
     const heights = allSecs.map((_,i) => {
       const el = measurer.querySelector('#__rpt' + i);
-      return el ? el.offsetHeight : 200;
+      if (!el) return 200;
+      // Medir con posición relativa al siguiente elemento: incluye márgenes entre secciones
+      // (offsetHeight no cuenta márgenes CSS, lo que acumulaba error y causaba overflow)
+      const next = measurer.querySelector('#__rpt' + (i + 1));
+      if (next) {
+        return Math.round(next.getBoundingClientRect().top - el.getBoundingClientRect().top);
+      }
+      return el.offsetHeight;
     });
     document.body.removeChild(measurer);
 
@@ -2706,15 +2713,27 @@ function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
         +'<td class="num '+(sdP>0?'warn':'ok')+'">'+fm(sdP)+'</td></tr>';
     }).join('');
     const pgs=pgBC[cid]||[];
-    const rPg=pgs.length===0?''
-      :'<tr><td colspan="4" class="pago-subhd">Pagos realizados</td></tr>'
-      +pgs.map(pg=>'<tr class="pago-row"><td style="padding-left:12px;font-size:8.5pt">'+(pg.fecha||'')+(pg.notas?' &middot; '+_escHtml(pg.notas):'')+'</td><td></td><td class="num ok">'+fm(pg._v)+'</td><td></td></tr>').join('');
     const tR='<tr class="tftr"><td><strong>TOTAL</strong></td><td class="num"><strong>'+(sP>0?fm(sP):'—')+'</strong></td><td class="num ok"><strong>'+fm(sPag)+'</strong></td><td class="num '+(sd>0?'warn':'ok')+'"><strong>'+fm(sd)+'</strong></td></tr>';
     if(moFirst){moSecs.push('<div class="sec-title">Mano de Obra</div>');moFirst=false;}
     const colsMO='<colgroup><col><col style="width:90px"><col style="width:90px"><col style="width:90px"></colgroup>';
-    moSecs.push('<div class="cont-box"><table class="tbl" style="table-layout:fixed">'+colsMO+'<thead><tr><th colspan="4" class="cont-hdr">'+_escHtml(cont.nombre)+'</th></tr>'
-      +'<tr><th>Concepto</th><th class="num">Presupuesto</th><th class="num">Pagado</th><th class="num">Adeuda</th></tr></thead>'
-      +'<tbody>'+rP+rPg+'</tbody><tfoot>'+tR+'</tfoot></table></div>');
+    // Chunkear pagos igual que cobros/materiales: evita que un contratista con
+    // muchos pagos supere la altura de página y sea cortado por overflow:hidden
+    const pgRows=pgs.map(pg=>'<tr class="pago-row"><td style="padding-left:12px;font-size:8.5pt">'+(pg.fecha||'')+(pg.notas?' &middot; '+_escHtml(pg.notas):'')+'</td><td></td><td class="num ok">'+fm(pg._v)+'</td><td></td></tr>');
+    const MPAG=8;
+    const numChunks=pgRows.length===0?1:Math.ceil(pgRows.length/MPAG);
+    for(let ci=0;ci<numChunks;ci++){
+      const isFirst=ci===0,isLast=ci===numChunks-1;
+      const chunk=pgRows.slice(ci*MPAG,(ci+1)*MPAG);
+      const bodyRows=(isFirst?rP:'')
+        +(pgs.length>0?'<tr><td colspan="4" class="pago-subhd">Pagos realizados'+(numChunks>1&&!isFirst?' (cont.)':'')+'</td></tr>':'')
+        +chunk.join('');
+      moSecs.push('<div class="cont-box"><table class="tbl" style="table-layout:fixed">'+colsMO
+        +'<thead><tr><th colspan="4" class="cont-hdr">'+_escHtml(cont.nombre)+(numChunks>1&&!isFirst?' <span class="usd">(cont.)</span>':'')+'</th></tr>'
+        +(isFirst?'<tr><th>Concepto</th><th class="num">Presupuesto</th><th class="num">Pagado</th><th class="num">Adeuda</th></tr>':'')
+        +'</thead>'
+        +'<tbody>'+bodyRows+'</tbody>'+(isLast?'<tfoot>'+tR+'</tfoot>':'')
+        +'</table></div>');
+    }
   });
   if(moSecs.length===0)moSecs.push('<p class="enota">Sin movimientos registrados.</p>');
 
