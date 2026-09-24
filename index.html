@@ -2247,52 +2247,16 @@ async function generarReporteObra(obraId) {
     ]);
 
     // Construir secciones
-    const { headerHTML, summaryHTML, sections } = _buildReporteData({
+    const { headerHTML, items } = _buildReporteData({
       obra: obra||{}, caja: caja||{}, presups: presups||[],
       cobros: cobros||[], pagos: pagos||[], mats: mats||[],
       logo: _logoGlobal||''
     });
 
-    // Medir alturas en div off-screen (position:absolute garantiza que el browser calcule layout)
+    // Paginación inteligente: se arman hojas A4 reales y las tablas se cortan
+    // por fila justo donde termina la hoja, continuando en la siguiente
     const css = _getReporteCSS();
-    const allSecs = [summaryHTML, ...sections];
-    const measurer = document.createElement('div');
-    measurer.style.cssText = 'position:absolute;top:-99999px;left:0;width:673px;background:#fff';
-    measurer.innerHTML = '<style>' + css + '</style>'
-      + allSecs.map((s,i) => '<div id="__rpt' + i + '">' + s + '</div>').join('');
-    document.body.appendChild(measurer);
-    await new Promise(r => requestAnimationFrame(r));
-    await new Promise(r => requestAnimationFrame(r));
-    const heights = allSecs.map((_,i) => {
-      const el = measurer.querySelector('#__rpt' + i);
-      if (!el) return 200;
-      // Medir con posición relativa al siguiente elemento: incluye márgenes entre secciones
-      // (offsetHeight no cuenta márgenes CSS, lo que acumulaba error y causaba overflow)
-      const next = measurer.querySelector('#__rpt' + (i + 1));
-      if (next) {
-        return Math.round(next.getBoundingClientRect().top - el.getBoundingClientRect().top);
-      }
-      return el.offsetHeight;
-    });
-    document.body.removeChild(measurer);
-
-    // Paginar: área útil ≈ 900px por página (A4 a 96dpi menos header y padding)
-    const PAGE_H = 900;
-    const pages = [[]];
-    let ph = 0;
-    for (let i = 0; i < allSecs.length; i++) {
-      const h = heights[i];
-      if (ph + h > PAGE_H && pages[pages.length-1].length > 0) {
-        pages.push([]); ph = 0;
-      }
-      pages[pages.length-1].push(allSecs[i]);
-      ph += h;
-    }
-
-    // Construir HTML con divs A4 explícitos — uno por página
-    const pagesHTML = pages.map(secs =>
-      '<div class="pdf-page">' + headerHTML + secs.join('') + '</div>'
-    ).join('');
+    const pagesHTML = _paginarReporte(items, headerHTML, css);
 
     const fullHTML = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>'
       + '<title>Reporte de Obra</title>'
@@ -2665,19 +2629,12 @@ function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
   });
   const thCob='<thead><tr><th colspan="3" class="cont-hdr" style="background:#F07800!important;color:#fff!important">Detalle de cobros</th></tr>'
     +'<tr><th class="dn">Fecha</th><th>Concepto</th><th class="num">Importe</th></tr></thead>';
-  const cobrosSecs=[];
-  if(cobros.length===0){
-    cobrosSecs.push('<p class="enota">Sin cobros.</p>');
-  } else {
-    for(let ci=0;ci*MAX_ROWS<cobrosRowsArr.length;ci++){
-      const ch=cobrosRowsArr.slice(ci*MAX_ROWS,(ci+1)*MAX_ROWS);
-      const isLastC=(ci+1)*MAX_ROWS>=cobrosRowsArr.length;
-      cobrosSecs.push('<table class="tbl">'+thCob+'<tbody>'+ch.join('')+'</tbody>'
-        +(isLastC?'<tfoot><tr class="tftr"><td colspan="2"><strong>TOTAL COBRADO</strong></td>'
-          +'<td class="num ok"><strong>'+fm(totCobros)+'</strong></td></tr></tfoot>':'')
-        +'</table>');
-    }
-  }
+  // Tabla completa; el paginador la corta por filas si no entra en la hoja
+  const cobrosContent = cobros.length===0
+    ? '<p class="enota">Sin cobros.</p>'
+    : '<table class="tbl">'+thCob+'<tbody>'+cobrosRowsArr.join('')+'</tbody>'
+      +'<tfoot><tr class="tftr"><td colspan="2"><strong>TOTAL COBRADO</strong></td>'
+      +'<td class="num ok"><strong>'+fm(totCobros)+'</strong></td></tr></tfoot></table>';
 
   // Honorarios
   const pH=presups.filter(p=>p.tipo==='Honorarios');
@@ -2714,26 +2671,16 @@ function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
     }).join('');
     const pgs=pgBC[cid]||[];
     const tR='<tr class="tftr"><td><strong>TOTAL</strong></td><td class="num"><strong>'+(sP>0?fm(sP):'—')+'</strong></td><td class="num ok"><strong>'+fm(sPag)+'</strong></td><td class="num '+(sd>0?'warn':'ok')+'"><strong>'+fm(sd)+'</strong></td></tr>';
-    if(moFirst){moSecs.push('<div class="sec-title">Mano de Obra</div>');moFirst=false;}
     const colsMO='<colgroup><col><col style="width:90px"><col style="width:90px"><col style="width:90px"></colgroup>';
-    // Chunkear pagos igual que cobros/materiales: evita que un contratista con
-    // muchos pagos supere la altura de página y sea cortado por overflow:hidden
-    const pgRows=pgs.map(pg=>'<tr class="pago-row"><td style="padding-left:12px;font-size:8.5pt">'+(pg.fecha||'')+(pg.notas?' &middot; '+_escHtml(pg.notas):'')+'</td><td></td><td class="num ok">'+fm(pg._v)+'</td><td></td></tr>');
-    const MPAG=8;
-    const numChunks=pgRows.length===0?1:Math.ceil(pgRows.length/MPAG);
-    for(let ci=0;ci<numChunks;ci++){
-      const isFirst=ci===0,isLast=ci===numChunks-1;
-      const chunk=pgRows.slice(ci*MPAG,(ci+1)*MPAG);
-      const bodyRows=(isFirst?rP:'')
-        +(pgs.length>0?'<tr><td colspan="4" class="pago-subhd">Pagos realizados'+(numChunks>1&&!isFirst?' (cont.)':'')+'</td></tr>':'')
-        +chunk.join('');
-      moSecs.push('<div class="cont-box"><table class="tbl" style="table-layout:fixed">'+colsMO
-        +'<thead><tr><th colspan="4" class="cont-hdr">'+_escHtml(cont.nombre)+(numChunks>1&&!isFirst?' <span class="usd">(cont.)</span>':'')+'</th></tr>'
-        +(isFirst?'<tr><th>Concepto</th><th class="num">Presupuesto</th><th class="num">Pagado</th><th class="num">Adeuda</th></tr>':'')
-        +'</thead>'
-        +'<tbody>'+bodyRows+'</tbody>'+(isLast?'<tfoot>'+tR+'</tfoot>':'')
-        +'</table></div>');
-    }
+    // Tabla completa del contratista. El paginador la corta por filas si no entra.
+    // La fila "Pagos realizados" es keep-next: nunca queda sola al pie de una hoja.
+    const rPg=pgs.length===0?''
+      :'<tr class="keep-next pago-subhd-row"><td colspan="4" class="pago-subhd">Pagos realizados</td></tr>'
+      +pgs.map(pg=>'<tr class="pago-row"><td style="padding-left:12px;font-size:8.5pt">'+(pg.fecha||'')+(pg.notas?' &middot; '+_escHtml(pg.notas):'')+'</td><td></td><td class="num ok">'+fm(pg._v)+'</td><td></td></tr>').join('');
+    moSecs.push('<div class="cont-box"><table class="tbl" style="table-layout:fixed">'+colsMO
+      +'<thead><tr><th colspan="4" class="cont-hdr">'+_escHtml(cont.nombre)+'</th></tr>'
+      +'<tr><th>Concepto</th><th class="num">Presupuesto</th><th class="num">Pagado</th><th class="num">Adeuda</th></tr></thead>'
+      +'<tbody>'+rP+rPg+'</tbody><tfoot>'+tR+'</tfoot></table></div>');
   });
   if(moSecs.length===0)moSecs.push('<p class="enota">Sin movimientos registrados.</p>');
 
@@ -2776,39 +2723,179 @@ function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
     +'<div class="card-item"><div class="card-lbl">Total pagado materiales</div><div class="card-val">'+fm(totalMateriales)+'</div></div>'
     +'</div>';
 
-  // MO: sec-title SIEMPRE unido al primer cont-box → nunca queda huérfano al final de página
-  const moEntries = (()=>{
-    if(moSecs.length===1&&!moSecs[0].startsWith('<div class="cont-box">')){
-      return ['<div style="margin-top:12px"><div class="sec-title">Mano de Obra</div><div style="height:4px"></div><div class="sec-box">'+moSecs[0]+'</div></div>'];
-    }
-    const entries=[];
-    // sec-title + primer cont-box juntos (son adyacentes → CSS .sec-title+.cont-box aplica)
-    entries.push('<div style="margin-top:12px">'+moSecs[0]+(moSecs[1]||'')+'</div>');
-    for(let i=2;i<moSecs.length;i++) entries.push('<div style="margin-top:8px">'+moSecs[i]+'</div>');
-    return entries;
-  })();
-
-  // Mat: una sola tabla con un solo <thead> → sin doble encabezado
-  // Si hay muchas filas y no entra en una página, el paginador la pone en página propia
-  const matSingleContent = mats.length===0
+  const matContent = mats.length===0
     ? '<p class="enota">Sin compras registradas.</p>'
     : '<table class="tbl"><thead><tr><th class="dn">Fecha</th><th>Descripción</th><th class="num">Importe</th></tr></thead>'
       +'<tbody>'+matRowsArr.join('')+'</tbody>'
       +'<tfoot><tr class="tftr"><td colspan="2"><strong>TOTAL MATERIALES</strong></td>'
       +'<td class="num"><strong>'+fm(totMat)+'</strong></td></tr></tfoot></table>';
-  const matEntries = ['<div style="margin-top:12px"><div class="sec-title">Materiales</div><div style="height:4px"></div><div class="sec-box">'+matSingleContent+'</div></div>'];
 
-  return {
-    headerHTML,
-    summaryHTML,
-    sections: [
-      '<div style="margin-top:12px"><div class="sec-title">Cobros al cliente</div><div style="height:4px"></div><div class="sec-box">'+cobrosSecs.join('')+'</div></div>',
-      '<div style="margin-top:12px"><div class="sec-title">Honorarios</div><div style="height:4px"></div><div class="sec-box">'+honContent+'</div></div>',
-      ...moEntries,
-      ...matEntries,
-      '<div class="firma">Firma<br/><strong>Arq. Daniel Cardigni &mdash; Mat. 30288</strong></div>'
-    ]
+  // Lista plana de ítems que recorre el paginador:
+  //   block → no se corta (si no entra, pasa entero a la hoja siguiente)
+  //   title → título de sección; siempre queda pegado al inicio de la tabla siguiente
+  //   table → caja con UNA tabla; se corta por filas y continúa en la hoja siguiente
+  const T = txt => ({ t:'title', html:'<div class="sec-title" style="margin-top:12px">'+txt+'</div>' });
+  const box = content => content.indexOf('<table')===-1
+    ? { t:'block', html:'<div class="sec-box" style="margin-top:4px">'+content+'</div>' }
+    : { t:'table', html:'<div class="sec-box" style="margin-top:4px">'+content+'</div>' };
+
+  const items = [
+    { t:'block', html: summaryHTML },
+    T('Cobros al cliente'), box(cobrosContent),
+    T('Honorarios'),        box(honContent),
+    T('Mano de Obra'),
+    ...moSecs.map(h => h.indexOf('<table')===-1 ? box(h) : { t:'table', html:h }),
+    T('Materiales'),        box(matContent),
+    { t:'block', html:'<div class="firma">Firma<br/><strong>Arq. Daniel Cardigni &mdash; Mat. 30288</strong></div>' }
+  ];
+
+  return { headerHTML, items };
+}
+
+// ============================================================
+//  PAGINADOR DEL REPORTE
+//  Arma hojas A4 reales en un contenedor oculto y va agregando
+//  los ítems uno por uno midiendo contra el borde inferior real
+//  de la hoja. Si una tabla no entra, la corta en la última fila
+//  que entra y la continúa en la hoja siguiente repitiendo el
+//  encabezado (con "(cont.)") y dejando el TOTAL solo al final.
+// ============================================================
+function _paginarReporte(items, headerHTML, css) {
+  const SAFETY = 6; // px de margen para diferencias de render al imprimir
+  const host = document.createElement('div');
+  host.style.cssText = 'position:absolute;top:0;left:-99999px;';
+  host.innerHTML = '<style>' + css + '</style>';
+  document.body.appendChild(host);
+
+  const pages = [];
+  let page, limit, used; // used = la hoja ya tiene contenido además del membrete
+
+  const newPage = () => {
+    page = document.createElement('div');
+    page.className = 'pdf-page';
+    page.innerHTML = headerHTML;
+    host.appendChild(page);
+    pages.push(page);
+    const r = page.getBoundingClientRect();
+    const pb = parseFloat(getComputedStyle(page).paddingBottom) || 0;
+    limit = r.top + page.offsetHeight - pb - SAFETY;
+    used = false;
   };
+  const toEl = html => { const d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; };
+  const fits = el => el.getBoundingClientRect().bottom <= limit;
+  const bodyRows = el => { const tb = el.querySelector('table').tBodies[0]; return tb ? [...tb.rows] : []; };
+
+  const markCont = el => {
+    const h = el.querySelector('th.cont-hdr');
+    if (h && !h.querySelector('.cont-mark')) h.insertAdjacentHTML('beforeend', ' <span class="usd cont-mark">(cont.)</span>');
+  };
+
+  // Coloca una tabla; si no entra, la corta por filas y sigue en otra hoja
+  const placeTable = el => {
+    page.appendChild(el);
+    if (fits(el)) { used = true; return; }
+
+    const table = el.querySelector('table');
+    const tbody = table.tBodies[0];
+    const tfoot = table.tFoot;
+    if (tfoot) tfoot.remove();
+    const rows = bodyRows(el);
+
+    // Cuántas filas entran en esta hoja
+    let k = rows.findIndex(r => r.getBoundingClientRect().bottom > limit - 4);
+    if (k === -1) k = rows.length;
+    const moved = rows.slice(k);
+    moved.forEach(r => r.remove());
+    while (k > 0 && !fits(el)) { k--; moved.unshift(rows[k]); rows[k].remove(); }
+    // No dejar un subtítulo ("Pagos realizados") solo al pie
+    while (k > 0 && rows[k-1].classList.contains('keep-next')) { k--; moved.unshift(rows[k]); rows[k].remove(); }
+    // Todas las filas entraron pero el TOTAL no: pasar al menos 1 fila con el total
+    if (moved.length === 0 && tfoot && k > 0) { k--; moved.unshift(rows[k]); rows[k].remove(); }
+
+    if (k === 0) {
+      // No entra ni una fila: la tabla entera va a la hoja siguiente
+      moved.forEach(r => tbody.appendChild(r));
+      if (tfoot) table.appendChild(tfoot);
+      el.remove();
+      if (!used) { page.appendChild(el); used = true; return; } // hoja vacía: evitar loop
+      newPage();
+      placeTable(el);
+      return;
+    }
+    used = true;
+
+    // Continuación: misma tabla (encabezados repetidos) con las filas restantes
+    const cont = el.cloneNode(true);
+    const cTable = cont.querySelector('table');
+    const cBody = cTable.tBodies[0];
+    cBody.innerHTML = '';
+    // Si el corte cae dentro de los pagos, repetir el subtítulo "Pagos realizados (cont.)"
+    if (moved[0] && moved[0].classList.contains('pago-row')) {
+      const sub = rows.slice(0, k).reverse().find(r => r.classList.contains('pago-subhd-row'));
+      if (sub) {
+        const s = sub.cloneNode(true);
+        s.querySelector('td').insertAdjacentText('beforeend', ' (cont.)');
+        cBody.appendChild(s);
+      }
+    }
+    moved.forEach(r => cBody.appendChild(r));
+    if (tfoot) cTable.appendChild(tfoot);
+    markCont(cont);
+    cont.style.marginTop = '0';
+    newPage();
+    placeTable(cont);
+  };
+
+  // Coloca un bloque que no se corta
+  const placeBlock = el => {
+    page.appendChild(el);
+    if (fits(el) || !used) { used = true; return; }
+    el.remove();
+    newPage();
+    page.appendChild(el);
+    used = true;
+  };
+
+  // Versión mínima de un ítem (encabezado + 2 filas) para decidir si un título entra con él
+  const probeOf = it => {
+    const el = toEl(it.html);
+    if (it.t === 'table') {
+      const t = el.querySelector('table');
+      if (t.tFoot) t.tFoot.remove();
+      const rs = bodyRows(el);
+      let keep = Math.min(2, rs.length);
+      while (keep < rs.length && rs[keep-1].classList.contains('keep-next')) keep++;
+      rs.slice(keep).forEach(r => r.remove());
+    }
+    return el;
+  };
+
+  newPage();
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (it.t === 'title') {
+      const el = toEl(it.html);
+      page.appendChild(el);
+      const next = items[i+1];
+      let ok = fits(el);
+      if (ok && next) {
+        const p = probeOf(next);
+        page.appendChild(p);
+        ok = fits(p);
+        p.remove();
+      }
+      if (!ok && used) { el.remove(); newPage(); page.appendChild(el); }
+      used = true;
+    } else if (it.t === 'table') {
+      placeTable(toEl(it.html));
+    } else {
+      placeBlock(toEl(it.html));
+    }
+  }
+
+  const html = pages.map(p => p.outerHTML).join('');
+  document.body.removeChild(host);
+  return html;
 }
 
 // ---- SWIPE BACK (gesto iOS) ----
