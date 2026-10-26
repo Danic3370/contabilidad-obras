@@ -476,7 +476,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
 
   <!-- PAGO CONTRATISTA FORM -->
   <div class="page" id="p-pago-form">
-    <div class="tb"><div class="tb-row"><span class="back" onclick="goBack()"><i class="ti ti-arrow-left"></i> Volver</span><div class="tb-title" id="pago-form-title">Pago a contratista</div><div style="width:44px"></div></div></div>
+    <div class="tb"><div class="tb-row"><span class="back" onclick="editPago=null;goBack()"><i class="ti ti-arrow-left"></i> Volver</span><div class="tb-title" id="pago-form-title">Pago a contratista</div><div style="width:44px"></div></div></div>
     <div class="content">
       <div class="field"><label>Contratista *</label><select id="f-pago-contratista" onchange="onPagoContratistaChange(this.value)"><option value="">Seleccionar...</option></select></div>
       <div class="field"><label>Obra *</label><select id="f-pago-obra" onchange="loadCajaForPago(this.value)"><option value="">Elegí una obra...</option></select></div>
@@ -496,7 +496,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);font-family:-apple-sy
       <div class="field"><label>Fecha</label><input type="date" id="f-pago-fecha"/></div>
       <div class="field"><label>Notas</label><textarea id="f-pago-notas" placeholder="Observaciones..."></textarea></div>
       <button class="btn-main" onclick="savePago()">Guardar pago</button>
-      <button class="btn-ghost" onclick="goBack()">Cancelar</button>
+      <button class="btn-ghost" onclick="editPago=null;goBack()">Cancelar</button>
       <div id="pago-form-delete" style="display:none"><div class="div"></div><button class="btn-danger" onclick="deletePago(editPago?.id)">Eliminar pago</button></div>
     </div>
   </div>
@@ -2711,7 +2711,10 @@ function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
   const headerHTML='<div class="hbox"><div class="htxt"><span class="l1">Arq. Daniel Cardigni &mdash; Matr&iacute;cula 30288</span><span class="l2">Calle 11 n690 &nbsp;&mdash;&nbsp; Tel. 11 28522111</span></div>'+logoTag+'</div>';
 
   // Resumen (siempre al inicio de pág 1)
-  const summaryHTML='<div class="rep-title">REPORTE DE OBRA</div>'
+  // IMPORTANTE: envuelto en un único <div> para que toEl() devuelva todo el bloque
+  // (toEl usa firstElementChild — sin wrapper solo vería el primer div hermano)
+  const summaryHTML='<div>'
+    +'<div class="rep-title">REPORTE DE OBRA</div>'
     +'<div class="rep-sub"><strong>'+_escHtml(obra.cliente||'')+'</strong>'
     +(obra.nombre?' &nbsp;&middot;&nbsp; '+_escHtml(obra.nombre):'')
     +(obra.direccion?'<br/>'+_escHtml(obra.direccion):'')
@@ -2721,6 +2724,7 @@ function _buildReporteData({ obra, caja, presups, cobros, pagos, mats, logo }) {
     +'<div class="card-item"><div class="card-lbl">Dinero en caja disponible</div><div class="card-val '+(cajaDisponible>=0?'green':'red')+'">'+fm(cajaDisponible)+'</div></div>'
     +'<div class="card-item"><div class="card-lbl">Total pagado mano de obra</div><div class="card-val">'+fm(totalPagadoMO)+'</div></div>'
     +'<div class="card-item"><div class="card-lbl">Total pagado materiales</div><div class="card-val">'+fm(totalMateriales)+'</div></div>'
+    +'</div>'
     +'</div>';
 
   const matContent = mats.length===0
@@ -2818,7 +2822,16 @@ function _paginarReporte(items, headerHTML, css) {
       if (tfoot) table.appendChild(tfoot);
       el.remove();
       if (!used) { page.appendChild(el); used = true; return; } // hoja vacía: evitar loop
+      // Si el último elemento visible es un sec-title, llevarlo a la nueva hoja
+      // para evitar que quede huérfano sin su tabla
+      const lastChild = page.lastElementChild;
+      let orphanTitle = null;
+      if (lastChild && lastChild.classList.contains('sec-title')) {
+        orphanTitle = lastChild;
+        page.removeChild(orphanTitle);
+      }
       newPage();
+      if (orphanTitle) page.appendChild(orphanTitle);
       placeTable(el);
       return;
     }
